@@ -223,6 +223,17 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(202, { runId, sessionId, driver: driver.name }))
     }
 
+    // —— 新建会话（验收与前端都需要；租户由 ctx 决定，不接受外部指定）——
+    if (req.method === 'POST' && url.pathname === '/api/sessions') {
+      const ctx = resolveContext(req.headers?.authorization)
+      if (ctx.error) return reply(res, ctx)
+      const body = await readJson(req)
+      const id = `s_${Math.random().toString(16).slice(2, 10)}`
+      const title = String(body.title ?? '新会话').slice(0, 60)
+      db.prepare('insert into sessions (id, tenant_id, user_id, title) values (?, ?, ?, ?)').run(id, ctx.tenantId, ctx.userId, title)
+      return reply(res, json(201, { id, title }))
+    }
+
     // —— 审批回写 ——
     const ap = /^\/api\/approvals\/([^/]+)$/.exec(url.pathname)
     if (req.method === 'POST' && ap) {

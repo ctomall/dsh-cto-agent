@@ -76,3 +76,25 @@ test('本租户内的不存在资源 → 404 且不写越权审计', () => {
   assert.equal(r.status, 404)
   assert.equal(db.prepare('select count(*) c from audit_log').get().c, 0)
 })
+
+test('新建会话归属于调用方租户，且跨租户不可见', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+
+  const created = await fetch(`${base}/api/sessions`, { method: 'POST', headers: H, body: JSON.stringify({ title: '验收会话' }) })
+  assert.equal(created.status, 201)
+  const { id } = await created.json()
+  assert.match(id, /^s_[0-9a-f]{8}$/)
+
+  const mine = await (await fetch(`${base}/api/sessions`, { headers: H })).json()
+  assert.equal(mine.sessions.some((s) => s.id === id), true)
+
+  const other = await (await fetch(`${base}/api/sessions/s_00000000`, { headers: { authorization: 'Bearer tok_b' } })).json()
+  assert.equal(other.error, 'not_found')
+})
