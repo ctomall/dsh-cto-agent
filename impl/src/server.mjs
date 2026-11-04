@@ -11,6 +11,7 @@ import { handleLiveEvents, parseLastEventId } from './sse.mjs'
 import { AgentLoop } from './loop.mjs'
 import { createTools } from './tools.mjs'
 import { createDriverFromEnv } from './model.mjs'
+import { createGrants } from './grants.mjs'
 
 // 启动时快照：升级后进程若不重启，这个值不会变——正好用来证明"升级到底生效没有"
 export const BOOT_SHA = (() => {
@@ -102,7 +103,14 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   let seq = 0
   const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? '/tmp/cube-agent-workspace'
   const { driver, source: driverSource } = createDriverFromEnv()
-  const loop = new AgentLoop({ rc, tools: createTools({ workspaceRoot: WORKSPACE_ROOT }), driver, workspaceRoot: WORKSPACE_ROOT })
+  const grants = createGrants(db)
+  const loop = new AgentLoop({
+    rc,
+    tools: createTools({ workspaceRoot: WORKSPACE_ROOT }),
+    driver,
+    grants,
+    workspaceRoot: WORKSPACE_ROOT,
+  })
   console.log(`[cube-agent] model driver: ${driver.name} (${driverSource})`)
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local')
@@ -136,10 +144,17 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const ctx = resolveContext(req.headers?.authorization)
       if (ctx.error) return reply(res, ctx)
       const body = await readJson(req)
+      const sessionId = String(body.sessionId ?? 's_a1')
+      // 会话归属必须与 tenant 一致，否则按不存在处理（不泄露是否存在）
+      const owned = db
+        .prepare('select 1 from sessions where id = ? and tenant_id = ?')
+        .get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+
       const runId = `r${Date.now()}${(seq++).toString(36)}`
       // 模型 loop：事件序列由 driver 决策产生，不是硬编码；跑到审批处会挂起
-      await loop.start({ runId, input: String(body.input ?? '') })
-      return reply(res, json(202, { runId, driver: driver.name }))
+      await loop.start({ runId, tenantId: ctx.tenantId, sessionId, input: String(body.input ?? '') })
+      return reply(res, json(202, { runId, sessionId, driver: driver.name }))
     }
 
     // —— 审批回写 ——
@@ -150,9 +165,9 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const runId = decodeURIComponent(ap[1])
       if (!rc.status(runId)) return reply(res, json(404, { error: 'not_found' }))
       const body = await readJson(req)
-      const decision = body.decision === 'deny' ? 'deny' : 'allow_once'
+      const decision = ['deny', 'allow_session'].includes(body.decision) ? body.decision : 'allow_once'
       const out = await loop.resume({ runId, decision })
-      return reply(res, json(200, out))
+      return reply(res, json(200, { ...out, decision }))
     }
 
     // —— 升级 ——

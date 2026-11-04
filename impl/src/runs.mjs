@@ -26,8 +26,10 @@ export class RunController {
     return seq
   }
 
-  create(runId) {
-    this.db.prepare('insert into runs (id, status, started_at) values (?, ?, ?)').run(runId, 'queued', new Date().toISOString())
+  create(runId, { tenantId = null, sessionId = null } = {}) {
+    this.db
+      .prepare('insert into runs (id, status, started_at, tenant_id, session_id) values (?, ?, ?, ?, ?)')
+      .run(runId, 'queued', new Date().toISOString(), tenantId, sessionId)
     this.emitTo(runId, 'run.started', { runId })
     return runId
   }

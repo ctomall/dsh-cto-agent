@@ -19,7 +19,17 @@ export function openDb() {
       id text primary key,
       status text not null,
       started_at text not null,
-      ended_at text
+      ended_at text,
+      tenant_id text,
+      session_id text
+    );
+    create table session_grants (
+      tenant_id text not null,
+      session_id text not null,
+      tool text not null,
+      scope text not null default 'session',
+      granted_at text not null,
+      primary key (tenant_id, session_id, tool)
     );
     create table events (
       run_id text not null,

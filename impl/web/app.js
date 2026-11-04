@@ -89,7 +89,7 @@ function approvalCard(p) {
     await api(`/api/approvals/${state.runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
   }
   btnDeny.addEventListener('click', () => decide('deny'))
-  btnSession.addEventListener('click', () => decide('allow_once'))
+  btnSession.addEventListener('click', () => decide('allow_session'))
   btnOnce.addEventListener('click', () => decide('allow_once'))
 
   streamBox().append(card)
@@ -128,6 +128,14 @@ function handleEvent(type, p) {
     setStatus('等待你确认', false)
     // 截图模式：拿到审批卡后断开长连接，让页面进入 network idle
     if (qs.get('shot') === '1') setTimeout(() => state.es?.close(), 300)
+  } else if (type === 'approval.auto_approved') {
+    const box = streamBox()
+    const note = el('div', 'card auto')
+    const head = el('div', 'card-head')
+    head.append(el('span', 'name', `已按会话授权自动放行：${p.tool}`), el('span', 'status ok', 'auto'))
+    note.append(head)
+    box.append(note)
+    setStatus('执行完成', false)
   } else if (type === 'approval.decided') {
     document.querySelectorAll('.approval').forEach((c) => {
       if (!c.dataset.decision) c.dataset.decision = p.decision
@@ -151,7 +159,7 @@ function handleEvent(type, p) {
 function subscribe(runId) {
   const es = new EventSource(`/api/runs/${runId}/events?token=${encodeURIComponent(token)}`)
   state.es = es
-  for (const t of ['text.delta', 'tool.started', 'approval.requested', 'approval.decided', 'tool.finished', 'artifact.created', 'run.finished', 'run.canceled', 'run.failed']) {
+  for (const t of ['text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved', 'approval.decided', 'tool.finished', 'artifact.created', 'run.finished', 'run.canceled', 'run.failed']) {
     es.addEventListener(t, (e) => {
       try { handleEvent(t, JSON.parse(e.data)) } catch {}
     })

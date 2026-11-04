@@ -94,3 +94,6 @@ body {
 
 @media (max-width: 1024px) { .app { grid-template-columns: 260px 1fr; } .side { display: none; } }
 @media (max-width: 768px) { .app { grid-template-columns: 1fr; } .nav { display: none; } }
+
+.card.auto { border-style: dashed; background: var(--surface-2); }
+.card.auto .card-head { cursor: default; color: var(--text-2); }

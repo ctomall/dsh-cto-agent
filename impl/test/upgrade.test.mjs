@@ -245,3 +245,64 @@ test('真实 provider 代码路径：本地 mock /chat/completions 驱动 loop',
   assert.ok(types.includes('tool.started') && types.includes('artifact.created') && types.includes('run.finished'))
   assert.equal(rc.status('rp1'), 'done')
 })
+
+async function bootServer(t) {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { EventLog } = await import('../src/events.mjs')
+  const { RunController } = await import('../src/runs.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const log = new EventLog(db)
+  const app = createApp(db, { log, rc: new RunController(db, log) })
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  return { base: `http://127.0.0.1:${app.address().port}`, db, log }
+}
+
+const post = (base, path, body, token = 'tok_a') =>
+  fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  })
+
+test('会话级授权：同一会话第二次同工具不再弹审批卡', async (t) => {
+  const { base, log } = await bootServer(t)
+
+  const first = await (await post(base, '/api/runs', { input: '写一份报告', sessionId: 's_a1' })).json()
+  const d1 = await (await post(base, `/api/approvals/${first.runId}`, { decision: 'allow_session' })).json()
+  assert.equal(d1.status, 'done')
+
+  const second = await (await post(base, '/api/runs', { input: '再写一份报告', sessionId: 's_a1' })).json()
+  const types2 = log.after(second.runId, 0).map((e) => e.type)
+  assert.equal(types2.includes('approval.requested'), false, '第二次不应再弹审批')
+  assert.equal(types2.includes('approval.auto_approved'), true, '应留下自动放行事件')
+  assert.equal(log.after(second.runId, 0).at(-1).type, 'run.finished')
+})
+
+test('会话级授权不跨会话继承', async (t) => {
+  const { base, log, db } = await bootServer(t)
+  db.prepare("insert into sessions (id, tenant_id, user_id, title) values ('s_a2','t_a','u_a','A 的第二个会话')").run()
+
+  const first = await (await post(base, '/api/runs', { input: '写一份报告', sessionId: 's_a1' })).json()
+  await post(base, `/api/approvals/${first.runId}`, { decision: 'allow_session' })
+
+  // 同会话第二次：不弹卡
+  const again = await (await post(base, '/api/runs', { input: '再写一份报告', sessionId: 's_a1' })).json()
+  assert.equal(log.after(again.runId, 0).some((e) => e.type === 'approval.requested'), false)
+
+  // 换一个同租户但不同的会话：必须重新弹卡
+  const other = await (await post(base, '/api/runs', { input: '写一份报告', sessionId: 's_a2' })).json()
+  assert.equal(other.sessionId, 's_a2')
+  const types = log.after(other.runId, 0).map((e) => e.type)
+  assert.equal(types.includes('approval.requested'), true, '不同会话必须重新审批')
+  assert.equal(types.includes('approval.auto_approved'), false)
+})
+
+test('跨租户会话 id → 404，不泄露存在性', async (t) => {
+  const { base } = await bootServer(t)
+  const r = await post(base, '/api/runs', { input: '写文件', sessionId: 's_b1' })
+  assert.equal(r.status, 404)
+  const j = await r.json()
+  assert.equal(j.error, 'not_found')
+})

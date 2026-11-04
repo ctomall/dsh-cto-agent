@@ -1,23 +1,24 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, maxSteps = 10 }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, maxSteps = 10 }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
     this.workspaceRoot = workspaceRoot
+    this.grants = grants
     this.maxSteps = maxSteps
-    this.pending = new Map() // runId -> { messages, call, callId }
+    this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
   }
 
-  async start({ runId, input }) {
-    this.rc.create(runId)
+  async start({ runId, tenantId = null, sessionId = null, input }) {
+    this.rc.create(runId, { tenantId, sessionId })
     this.rc.transition(runId, 'running')
     this.rc.emitTo(runId, 'text.delta', { text: `收到目标：${input}` })
     const messages = [{ role: 'user', content: input }]
-    return this.step({ runId, messages, steps: 0 })
+    return this.step({ runId, messages, steps: 0, tenantId, sessionId })
   }
 
-  async step({ runId, messages, steps }) {
+  async step({ runId, messages, steps, tenantId, sessionId }) {
     if (steps >= this.maxSteps) {
       this.rc.transition(runId, 'failed')
       this.rc.emitTo(runId, 'run.failed', { runId, error: `超过最大步数 ${this.maxSteps}` })
@@ -38,13 +39,24 @@ export class AgentLoop {
     this.rc.emitTo(runId, 'tool.started', { tool: call.name, callId })
 
     const policy = this.tools.policy[call.name] ?? 'deny'
+    // 会话级授权命中：不再弹卡，但留下 auto_approved 事件，保证可审计
+    if (policy === 'confirm' && this.grants?.has({ tenantId, sessionId, tool: call.name })) {
+      this.rc.emitTo(runId, 'approval.auto_approved', {
+        callId,
+        tool: call.name,
+        reason: 'session_grant',
+        sessionId,
+      })
+      return this.executeAndContinue({ runId, messages, call, callId, steps, tenantId, sessionId })
+    }
+
     if (policy === 'deny') {
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: false, error: 'denied_by_policy' })
       messages.push({ role: 'tool', tool_call_id: callId, content: 'denied_by_policy' })
-      return this.step({ runId, messages, steps: steps + 1 })
+      return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
     }
     if (policy === 'confirm') {
-      this.pending.set(runId, { messages, call, callId, steps })
+      this.pending.set(runId, { messages, call, callId, steps, tenantId, sessionId })
       this.rc.transition(runId, 'waiting_approval')
       this.rc.emitTo(runId, 'approval.requested', {
         callId,
@@ -56,10 +68,10 @@ export class AgentLoop {
       return { status: 'waiting_approval' }
     }
 
-    return this.executeAndContinue({ runId, messages, call, callId, steps })
+    return this.executeAndContinue({ runId, messages, call, callId, steps, tenantId, sessionId })
   }
 
-  async executeAndContinue({ runId, messages, call, callId, steps }) {
+  async executeAndContinue({ runId, messages, call, callId, steps, tenantId, sessionId }) {
     try {
       const out = await this.tools.run(call.name, call.args, runId)
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: true, truncated: false })
@@ -69,7 +81,7 @@ export class AgentLoop {
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: false, error: String(e.message) })
       messages.push({ role: 'tool', tool_call_id: callId, content: `error: ${e.message}` })
     }
-    return this.step({ runId, messages, steps: steps + 1 })
+    return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
   }
 
   async resume({ runId, decision }) {
@@ -84,8 +96,20 @@ export class AgentLoop {
       return { status: 'canceled' }
     }
 
+    if (decision === 'allow_session' && this.grants) {
+      this.grants.add({ tenantId: p.tenantId, sessionId: p.sessionId, tool: p.call.name })
+    }
+
     this.rc.transition(runId, 'running')
-    return this.executeAndContinue({ runId, messages: p.messages, call: p.call, callId: p.callId, steps: p.steps })
+    return this.executeAndContinue({
+      runId,
+      messages: p.messages,
+      call: p.call,
+      callId: p.callId,
+      steps: p.steps,
+      tenantId: p.tenantId,
+      sessionId: p.sessionId,
+    })
   }
 }
 
