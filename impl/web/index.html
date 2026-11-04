@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cube-agent</title>
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+<div class="app">
+  <nav class="nav">
+    <div class="brand">cube<span>·agent</span></div>
+    <div class="nav-title">会话</div>
+    <ul id="sessions" class="sessions"></ul>
+    <div class="nav-foot"><span id="ver">-</span><span id="who">-</span></div>
+  </nav>
+
+  <main class="main">
+    <header class="topbar">
+      <h1 id="title">新会话</h1>
+      <div class="run" id="runbar" hidden>
+        <div class="bar"><i></i></div>
+        <span id="runlabel">正在执行</span>
+        <button class="ghost" id="stop">停止</button>
+      </div>
+    </header>
+
+    <section id="stream" class="stream">
+      <div class="empty" id="empty">
+        <h2>目标 → 规划 → 工具 → 产物</h2>
+        <p>说出你要完成的事，Agent 会调用工具，并在危险操作前请求你确认。</p>
+        <div class="examples">
+          <button class="chip" data-fill="把这三个 PDF 汇总成一份带目录的 docx">把三个 PDF 汇总成 docx</button>
+          <button class="chip" data-fill="查一下这个库的构建失败原因">查构建失败原因</button>
+          <button class="chip" data-fill="把这段结论写进知识库">写进知识库</button>
+        </div>
+        <p class="hint">支持拖入文件</p>
+      </div>
+    </section>
+
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="描述目标，Enter 发送 / Shift+Enter 换行 / Esc 停止"></textarea>
+      <div class="composer-right">
+        <button type="submit" id="send">发送</button>
+      </div>
+    </form>
+  </main>
+
+  <aside class="side">
+    <div class="side-title">上下文</div>
+    <div id="artifacts" class="artifacts"><p class="muted">产物会出现在这里</p></div>
+  </aside>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

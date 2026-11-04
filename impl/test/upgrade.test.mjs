@@ -121,3 +121,50 @@ test('/api/version 返回启动快照 SHA', async () => {
   assert.equal(r.status, 200)
   assert.match(r.body.sha, /^[0-9a-f]{7,}$|^unknown$/)
 })
+
+test('前端链路：创建 run → 停在审批 → 允许一次 → 产生产物', async () => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { EventLog } = await import('../src/events.mjs')
+  const { RunController } = await import('../src/runs.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const log = new EventLog(db)
+  const app = createApp(db, { log, rc: new RunController(db, log) })
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+
+  const created = await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '写个文件' }) })
+  assert.equal(created.status, 202)
+  const { runId } = await created.json()
+
+  const page = await fetch(`${base}/`).then((r) => r.text())
+  assert.match(page, /cube<span>·agent<\/span>/)
+
+  const decided = await fetch(`${base}/api/approvals/${runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'allow_once' }) })
+  const body = await decided.json()
+  assert.equal(body.status, 'done')
+  const types = log.after(runId, 0).map((e) => e.type)
+  assert.deepEqual(types, ['run.started','text.delta','tool.started','approval.requested','approval.decided','tool.finished','artifact.created','run.finished'])
+  app.close()
+})
+
+test('拒绝审批 → run.canceled，不产生产物', async () => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { EventLog } = await import('../src/events.mjs')
+  const { RunController } = await import('../src/runs.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const log = new EventLog(db)
+  const app = createApp(db, { log, rc: new RunController(db, log) })
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+  const { runId } = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: 'x' }) })).json()
+  const r = await fetch(`${base}/api/approvals/${runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'deny' }) })
+  assert.equal((await r.json()).status, 'canceled')
+  const types = log.after(runId, 0).map((e) => e.type)
+  assert.equal(types.includes('artifact.created'), false)
+  assert.equal(types.at(-1), 'run.canceled')
+  app.close()
+})
