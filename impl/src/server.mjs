@@ -1,5 +1,19 @@
 import { createServer } from 'node:http'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { resolveContext, auditDenial } from './context.mjs'
+import { createUpgrade, createUpgradeRoute } from './upgrade.mjs'
+
+// 仓库根 = impl/ 的上一级；升级只作用于本仓库
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const upgradeRoute = createUpgradeRoute({
+  token: process.env.CUBE_UPGRADE_TOKEN,
+  upgradeOnce: createUpgrade({
+    repoDir: REPO_ROOT,
+    remote: process.env.UPGRADE_REMOTE ?? 'origin',
+    branch: process.env.UPGRADE_BRANCH ?? 'main',
+  }),
+})
 
 const json = (status, body) => ({ status, body })
 
@@ -48,8 +62,13 @@ export function handleRequest(db, req) {
 }
 
 export function createApp(db) {
-  return createServer((req, res) => {
-    const { status, body } = handleRequest(db, req)
+  return createServer(async (req, res) => {
+    const url = new URL(req.url, 'http://local')
+    const result =
+      req.method === 'POST' && url.pathname === '/api/admin/upgrade'
+        ? await upgradeRoute(req)          // 在线一键升级：token 鉴权 + 单飞锁 + 仅 ff-only
+        : handleRequest(db, req)
+    const { status, body } = result
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify(body))
   })

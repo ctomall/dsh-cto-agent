@@ -51,6 +51,26 @@ scripts/upgrade.sh           # 拉取 → 跑测试 → 重启服务
 
 前置：远程已配置（`origin`）、当前分支为 `main`、服务由 `cube-agent.service` 托管。
 
+## HTTP 一键在线升级
+
+```bash
+CUBE_UPGRADE_TOKEN=<你的口令> node impl/src/server.mjs
+
+curl -X POST -H "x-upgrade-token: <你的口令>" http://127.0.0.1:8787/api/admin/upgrade
+```
+
+返回：`{ ok, upToDate, before, after, behind, tests }`。
+
+| 情况 | 响应 |
+|---|---|
+| 未配置 `CUBE_UPGRADE_TOKEN` | **503** `upgrade_disabled`（默认关闭，fail-closed） |
+| token 缺失/错误 | **401** `unauthenticated` |
+| 工作区有未提交改动 | **409** `dirty_worktree`（不覆盖本地） |
+| 已有升级在进行 | **409** `upgrade_in_progress`（单飞锁） |
+| 远程不可达 | **502** `fetch_failed` |
+
+只执行 `git fetch` + `git pull --ff-only`，**不执行** `reset --hard` / `clean`。
+
 ## 远程仓库
 
 > 本地目录名保留为 `cube-agent`（历史原因），**远程仓库名使用 `cto`**：`dsh-cto-agent`。
