@@ -122,7 +122,7 @@ test('/api/version 返回启动快照 SHA', async () => {
   assert.match(r.body.sha, /^[0-9a-f]{7,}$|^unknown$/)
 })
 
-test('前端链路：创建 run → 停在审批 → 允许一次 → 产生产物', async () => {
+test('前端链路：创建 run → 停在审批 → 允许一次 → 产生产物', async (t) => {
   const { createApp } = await import('../src/server.mjs')
   const { openDb, seedTwoTenants } = await import('../src/db.mjs')
   const { EventLog } = await import('../src/events.mjs')
@@ -130,6 +130,7 @@ test('前端链路：创建 run → 停在审批 → 允许一次 → 产生产�
   const db = openDb(); seedTwoTenants(db)
   const log = new EventLog(db)
   const app = createApp(db, { log, rc: new RunController(db, log) })
+  t.after(() => app.close())
   await new Promise((r) => app.listen(0, r))
   const base = `http://127.0.0.1:${app.address().port}`
   const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
@@ -145,11 +146,13 @@ test('前端链路：创建 run → 停在审批 → 允许一次 → 产生产�
   const body = await decided.json()
   assert.equal(body.status, 'done')
   const types = log.after(runId, 0).map((e) => e.type)
-  assert.deepEqual(types, ['run.started','text.delta','tool.started','approval.requested','approval.decided','tool.finished','artifact.created','run.finished'])
-  app.close()
+  assert.deepEqual(types, [
+    'run.started', 'text.delta', 'tool.started', 'approval.requested',
+    'approval.decided', 'tool.finished', 'artifact.created', 'text.delta', 'run.finished',
+  ])
 })
 
-test('拒绝审批 → run.canceled，不产生产物', async () => {
+test('拒绝审批 → run.canceled，不产生产物', async (t) => {
   const { createApp } = await import('../src/server.mjs')
   const { openDb, seedTwoTenants } = await import('../src/db.mjs')
   const { EventLog } = await import('../src/events.mjs')
@@ -157,14 +160,88 @@ test('拒绝审批 → run.canceled，不产生产物', async () => {
   const db = openDb(); seedTwoTenants(db)
   const log = new EventLog(db)
   const app = createApp(db, { log, rc: new RunController(db, log) })
+  t.after(() => app.close())
   await new Promise((r) => app.listen(0, r))
   const base = `http://127.0.0.1:${app.address().port}`
   const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
-  const { runId } = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: 'x' }) })).json()
+  const { runId } = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '写个文件' }) })).json()
   const r = await fetch(`${base}/api/approvals/${runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'deny' }) })
   assert.equal((await r.json()).status, 'canceled')
   const types = log.after(runId, 0).map((e) => e.type)
   assert.equal(types.includes('artifact.created'), false)
   assert.equal(types.at(-1), 'run.canceled')
-  app.close()
+})
+
+test('模型决策驱动：不同输入触发不同工具（不是硬编码序列）', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { EventLog } = await import('../src/events.mjs')
+  const { RunController } = await import('../src/runs.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const log = new EventLog(db)
+  const app = createApp(db, { log, rc: new RunController(db, log) })
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+
+  const write = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '写一份报告' }) })).json()
+  const read = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '读一下 report.md' }) })).json()
+
+  const wTools = log.after(write.runId, 0).filter((e) => e.type === 'tool.started').map((e) => e.payload.tool)
+  const rTools = log.after(read.runId, 0).filter((e) => e.type === 'tool.started').map((e) => e.payload.tool)
+  assert.deepEqual(wTools, ['fs.write'])
+  assert.deepEqual(rTools, ['fs.read'])
+  // 只读工具策略是 auto：不应出现审批请求
+  const rTypes = log.after(read.runId, 0).map((e) => e.type)
+  assert.equal(rTypes.includes('approval.requested'), false)
+})
+
+test('真实 provider 代码路径：本地 mock /chat/completions 驱动 loop', async (t) => {
+  const { createServer } = await import('node:http')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { EventLog } = await import('../src/events.mjs')
+  const { RunController } = await import('../src/runs.mjs')
+  const { AgentLoop } = await import('../src/loop.mjs')
+  const { createTools } = await import('../src/tools.mjs')
+  const { createOpenAiDriver } = await import('../src/model.mjs')
+
+  let calls = 0
+  const provider = createServer((req, res) => {
+    calls++
+    let body = ''
+    req.on('data', (c) => (body += c))
+    req.on('end', () => {
+      const payload = JSON.parse(body || '{}')
+      res.writeHead(200, { 'content-type': 'application/json' })
+      if (calls === 1) {
+        res.end(JSON.stringify({ choices: [{ message: { tool_calls: [{ id: 'tc1', function: { name: 'fs.write', arguments: JSON.stringify({ path: 'p.md', content: '# from provider' }) } }] } }] }))
+      } else {
+        res.end(JSON.stringify({ choices: [{ message: { content: `模型收尾（第 ${calls} 次调用）` } }] }))
+      }
+    })
+  })
+  await new Promise((r) => provider.listen(0, r))
+  t.after(() => provider.close())
+  const baseUrl = `http://127.0.0.1:${provider.address().port}`
+
+  const db = openDb(); seedTwoTenants(db)
+  const log = new EventLog(db)
+  const rc = new RunController(db, log)
+  const loop = new AgentLoop({
+    rc,
+    tools: createTools({ workspaceRoot: '/tmp/cw-provider' }),
+    driver: createOpenAiDriver({ baseUrl, apiKey: 'test-key', model: 'mock-1' }),
+    workspaceRoot: '/tmp/cw-provider',
+  })
+
+  const r1 = await loop.start({ runId: 'rp1', input: '生成文件' })
+  assert.equal(r1.status, 'waiting_approval')
+  const r2 = await loop.resume({ runId: 'rp1', decision: 'allow_once' })
+  assert.equal(r2.status, 'done')
+  assert.equal(calls, 2)
+
+  const types = log.after('rp1', 0).map((e) => e.type)
+  assert.ok(types.includes('tool.started') && types.includes('artifact.created') && types.includes('run.finished'))
+  assert.equal(rc.status('rp1'), 'done')
 })
