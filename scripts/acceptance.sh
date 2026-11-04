@@ -72,6 +72,11 @@ curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/
 r2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"再写一份\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
 e2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r2/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
 if echo "$e2" | grep -q 'approval.requested'; then no "同会话第二次免审批" "$e2"; else ok "同会话第二次免审批" "auto_approved"; fi
+rv=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 20 -d '{}' "$BASE/api/sessions/$SID/grants/revoke" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("revoked",""))' 2>/dev/null)
+[ "${rv:-0}" -ge 1 ] && ok "撤销会话授权" "${rv} 条" || no "撤销会话授权" "revoked=$rv"
+r3=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"再写\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
+e3=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r3/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
+echo "$e3" | grep -q 'approval.requested' && ok "撤销后重新审批" "approval.requested" || no "撤销后重新审批" "$e3"
 x=$(code -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -d '{"input":"x","sessionId":"s_b1"}' "$BASE/api/runs")
 [ "$x" = 404 ] && ok "跨租户 sessionId" "404" || no "跨租户 sessionId" "期望 404，实际 $x"
 

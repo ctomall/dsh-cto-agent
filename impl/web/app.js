@@ -11,7 +11,8 @@ const el = (tag, cls, text) => {
   return n
 }
 
-const state = { runId: null, es: null, assistant: null, seq: 0 }
+const sessionId = qs.get('sid') || 's_a1'
+const state = { runId: null, es: null, assistant: null, seq: 0, sessionId }
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -172,14 +173,19 @@ async function send(text) {
   assistantBubble()
   $('#input').value = ''
   setStatus('已提交，等待规划', false)
-  const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text }) })
+  const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
   if (status !== 202) { setStatus('提交失败', true); return }
   state.runId = body.runId
   state.decided = false
   subscribe(body.runId)
 }
 
-async function boot() {
+async function $('#revoke').addEventListener('click', async () => {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
+  $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条本会话授权` : `撤销失败（${status}）`
+})
+
+boot() {
   if (!token) {
     $('#who').textContent = 'no token'
     return
@@ -214,5 +220,10 @@ for (const chip of document.querySelectorAll('.chip')) {
   chip.addEventListener('click', () => { $('#input').value = chip.dataset.fill })
 }
 $('#stop').addEventListener('click', () => { state.es?.close(); setStatus('已停止', true) })
+
+$('#revoke').addEventListener('click', async () => {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
+  $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条本会话授权` : `撤销失败（${status}）`
+})
 
 boot()

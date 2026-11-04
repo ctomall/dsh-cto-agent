@@ -1,11 +1,12 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, maxSteps = 10 }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, maxSteps = 10 }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
     this.workspaceRoot = workspaceRoot
     this.grants = grants
+    this.audit = audit
     this.maxSteps = maxSteps
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
   }
@@ -41,6 +42,7 @@ export class AgentLoop {
     const policy = this.tools.policy[call.name] ?? 'deny'
     // 会话级授权命中：不再弹卡，但留下 auto_approved 事件，保证可审计
     if (policy === 'confirm' && this.grants?.has({ tenantId, sessionId, tool: call.name })) {
+      this.audit?.({ runId, tenantId, sessionId, tool: call.name, decision: 'session_grant' })
       this.rc.emitTo(runId, 'approval.auto_approved', {
         callId,
         tool: call.name,

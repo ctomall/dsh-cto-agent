@@ -306,3 +306,41 @@ test('跨租户会话 id → 404，不泄露存在性', async (t) => {
   const j = await r.json()
   assert.equal(j.error, 'not_found')
 })
+
+test('撤销会话授权后必须重新审批，并留下审计', async (t) => {
+  const { base, log, db } = await bootServer(t)
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+
+  // 建会话 → 首次审批允许本会话
+  const { id: sid } = await (await fetch(`${base}/api/sessions`, { method: 'POST', headers: H, body: JSON.stringify({ title: '撤销测试' }) })).json()
+  const r1 = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '写一份报告', sessionId: sid }) })).json()
+  await fetch(`${base}/api/approvals/${r1.runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'allow_session' }) })
+
+  // 复用生效
+  const r2 = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '再写', sessionId: sid }) })).json()
+  assert.equal(log.after(r2.runId, 0).some((e) => e.type === 'approval.auto_approved'), true)
+
+  // 自动放行必须落审计
+  const auditAuto = db.prepare("select count(*) c from audit_log where action = 'approval_auto_approved'").get()
+  assert.ok(Number(auditAuto.c) >= 1)
+
+  // 撤销
+  const rv = await fetch(`${base}/api/sessions/${sid}/grants/revoke`, { method: 'POST', headers: H, body: '{}' })
+  const rvBody = await rv.json()
+  assert.equal(rv.status, 200)
+  assert.equal(rvBody.revoked, 1)
+
+  // 撤销后必须重新审批
+  const r3 = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '再写', sessionId: sid }) })).json()
+  assert.equal(log.after(r3.runId, 0).some((e) => e.type === 'approval.requested'), true)
+})
+
+test('跨租户撤销授权 → 404', async (t) => {
+  const { base } = await bootServer(t)
+  const r = await fetch(`${base}/api/sessions/s_a1/grants/revoke`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer tok_b' },
+    body: '{}',
+  })
+  assert.equal(r.status, 404)
+})

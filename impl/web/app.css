@@ -97,3 +97,7 @@ body {
 
 .card.auto { border-style: dashed; background: var(--surface-2); }
 .card.auto .card-head { cursor: default; color: var(--text-2); }
+
+.side-foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.side-foot .btn { width: 100%; }
+.side-foot .muted { margin: 8px 0 0; font-size: 12px; }

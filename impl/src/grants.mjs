@@ -11,6 +11,12 @@ export function createGrants(db) {
         'insert or replace into session_grants (tenant_id, session_id, tool, scope, granted_at) values (?, ?, ?, ?, ?)',
       ).run(tenantId, sessionId, tool, 'session', new Date().toISOString())
     },
+    revoke({ tenantId, sessionId, tool = null }) {
+      const info = tool
+        ? db.prepare('delete from session_grants where tenant_id = ? and session_id = ? and tool = ?').run(tenantId, sessionId, tool)
+        : db.prepare('delete from session_grants where tenant_id = ? and session_id = ?').run(tenantId, sessionId)
+      return Number(info.changes ?? 0)
+    },
     list({ tenantId, sessionId }) {
       return db
         .prepare('select tool, scope, granted_at from session_grants where tenant_id = ? and session_id = ? order by tool')

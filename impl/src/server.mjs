@@ -122,6 +122,10 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     driver,
     grants,
     workspaceRoot: WORKSPACE_ROOT,
+    audit: ({ tenantId, sessionId, tool, decision }) =>
+      db
+        .prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
+        .run(tenantId, 'system', 'approval_auto_approved', JSON.stringify({ tool, sessionId, decision }), new Date().toISOString()),
   })
   console.log(`[cube-agent] model driver: ${driver.name} (${driverSource})`)
   return createServer(async (req, res) => {
@@ -232,6 +236,21 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const title = String(body.title ?? '新会话').slice(0, 60)
       db.prepare('insert into sessions (id, tenant_id, user_id, title) values (?, ?, ?, ?)').run(id, ctx.tenantId, ctx.userId, title)
       return reply(res, json(201, { id, title }))
+    }
+
+    // —— 撤销会话级授权（已知缺口补口：v16 明确写过"撤销口径缺失"）——
+    const rv = /^\/api\/sessions\/([^/]+)\/grants\/revoke$/.exec(url.pathname)
+    if (req.method === 'POST' && rv) {
+      const ctx = resolveContext(req.headers?.authorization)
+      if (ctx.error) return reply(res, ctx)
+      const sessionId = decodeURIComponent(rv[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      const body = await readJson(req)
+      const revoked = grants.revoke({ tenantId: ctx.tenantId, sessionId, tool: body.tool ? String(body.tool) : null })
+      db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
+        .run(ctx.tenantId, ctx.userId, 'session_grant_revoked', JSON.stringify({ sessionId, tool: body.tool ?? '*' , revoked }), new Date().toISOString())
+      return reply(res, json(200, { revoked }))
     }
 
     // —— 审批回写 ——
