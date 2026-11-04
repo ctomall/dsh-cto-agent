@@ -70,7 +70,13 @@ echo "== 升级完成 $BEFORE -> $AFTER"
 if systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE}"; then
   echo "== 重启 ${SERVICE}"
   systemctl restart "$SERVICE"
-  sleep 2
+  # 等就绪再判定，避免把"正在重启"记成"服务挂了"
+  ready=0
+  for i in $(seq 1 40); do
+    if curl -s -o /dev/null -m 3 "http://127.0.0.1:${PORT:-8787}/healthz"; then ready=$i; break; fi
+    sleep 1
+  done
+  [ "$ready" -gt 0 ] && echo "== 就绪（${ready}s）" || echo "WARN: 40s 内 /healthz 未就绪"
   systemctl is-active "$SERVICE"
 else
   echo "WARN: 未安装 ${SERVICE}，服务未重启（手动：node impl/src/server.mjs）"

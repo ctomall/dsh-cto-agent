@@ -65,10 +65,25 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000 
 }
 
 // 从环境装配：没有 key 就退回 fake，并说明原因（不静默）
+import { readFileSync } from 'node:fs'
+
+export function loadKeyFromFile(path) {
+  if (!path) return null
+  try {
+    const raw = readFileSync(path, 'utf8').trim()
+    return raw.startsWith('sk-') || raw.length >= 16 ? raw : null
+  } catch {
+    return null
+  }
+}
+
 export function createDriverFromEnv(env = process.env) {
   const baseUrl = env.MODEL_BASE_URL
   const model = env.MODEL_NAME
-  const apiKey = env.MODEL_API_KEY
-  if (baseUrl && model && apiKey) return { driver: createOpenAiDriver({ baseUrl, apiKey, model }), source: 'env' }
-  return { driver: createFakeDriver(), source: baseUrl || model ? 'fake(missing-key)' : 'fake(default)' }
+  const apiKey = env.MODEL_API_KEY ?? loadKeyFromFile(env.MODEL_API_KEY_FILE)
+  if (baseUrl && model && apiKey) {
+    return { driver: createOpenAiDriver({ baseUrl, apiKey, model }), source: env.MODEL_API_KEY ? 'env' : 'key-file' }
+  }
+  const missing = [!baseUrl && 'MODEL_BASE_URL', !model && 'MODEL_NAME', !apiKey && (env.MODEL_API_KEY_FILE ? 'MODEL_API_KEY_FILE(读不到内容)' : 'MODEL_API_KEY')].filter(Boolean)
+  return { driver: createFakeDriver(), source: missing.length ? `fake(missing: ${missing.join(',')})` : 'fake(default)' }
 }

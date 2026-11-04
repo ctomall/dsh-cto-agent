@@ -68,3 +68,27 @@ test('HTTP：升级接口 IP 白名单生效（403）', async (t) => {
   assert.equal(r.status, 403)
   assert.equal((await r.json()).error, 'ip_not_allowed')
 })
+
+test('登录失败单独限流：5 次/分钟', async (t) => {
+  process.env.APP_PASSWORD = 'pw'
+  process.env.APP_SESSION_SECRET = 'sk'
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => { app.close(); delete process.env.APP_PASSWORD; delete process.env.APP_SESSION_SECRET })
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const codes = []
+  for (let i = 0; i < 7; i++) {
+    const r = await fetch(`${base}/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'password=wrong',
+      redirect: 'manual',
+    })
+    codes.push(r.status)
+  }
+  assert.equal(codes.slice(0, 5).every((c) => c === 401), true)
+  assert.deepEqual(codes.slice(5), [429, 429])
+})

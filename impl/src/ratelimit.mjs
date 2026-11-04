@@ -27,10 +27,12 @@ export const LIMITS = {
   api: { limit: 60, windowMs: 60_000 },
   runs: { limit: 20, windowMs: 60_000 },
   upgrade: { limit: 3, windowMs: 60_000 },
+  login: { limit: 5, windowMs: 60_000 },
 }
 
 export function bucketFor(pathname, method) {
   if (pathname === '/api/admin/upgrade') return 'upgrade'
+  if (pathname === '/login' && method === 'POST') return 'login'
   if (pathname === '/api/runs' && method === 'POST') return 'runs'
   if (pathname.startsWith('/api/')) return 'api'
   return null

@@ -81,3 +81,20 @@ test('/api/model/status 明确标注是否为真实模型', async (t) => {
   assert.equal(typeof j.driver, 'string')
   assert.equal(j.real, !j.driver.startsWith('fake'))
 })
+
+test('MODEL_API_KEY_FILE：从文件读 key 即视为已配置真实 provider', async () => {
+  const { writeFileSync, mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { createDriverFromEnv } = await import('../src/model.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'cube-key-'))
+  const keyFile = join(dir, 'key')
+  writeFileSync(keyFile, 'sk-test-1234567890abcdef\n')
+
+  const r = createDriverFromEnv({ MODEL_BASE_URL: 'http://127.0.0.1:1', MODEL_NAME: 'm', MODEL_API_KEY_FILE: keyFile })
+  assert.equal(r.source, 'key-file')
+  assert.equal(r.driver.name, 'openai:m')
+
+  const missing = createDriverFromEnv({ MODEL_BASE_URL: 'http://x', MODEL_NAME: 'm' })
+  assert.match(missing.source, /fake\(missing: MODEL_API_KEY\)/)
+})
