@@ -104,3 +104,12 @@ test('fetch 失败 → 502，不冒成 500', async () => {
   const up = createUpgrade({ repoDir: '/repo', exec })
   await assert.rejects(() => up(), (e) => e instanceof UpgradeError && e.status === 502)
 })
+
+test('CUBE_TOKENS 注入时以 env 为准，且拒绝空集合', async () => {
+  const { loadTokens } = await import('../src/context.mjs')
+  const r = loadTokens({ CUBE_TOKENS: JSON.stringify({ 'real-token': { tenantId: 't_a', userId: 'u_a' } }) })
+  assert.equal(r.source, 'env')
+  assert.equal(r.tokens.has('real-token'), true)
+  assert.equal(r.tokens.has('tok_a'), false)
+  assert.throws(() => loadTokens({ CUBE_TOKENS: '{}' }), /拒绝启动/)
+})

@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveContext, auditDenial } from './context.mjs'
+import { resolveContext, auditDenial, TOKEN_SOURCE } from './context.mjs'
 import { createUpgrade, createUpgradeRoute } from './upgrade.mjs'
 
 // 仓库根 = impl/ 的上一级；升级只作用于本仓库
@@ -79,6 +79,9 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const { openDb, seedTwoTenants } = await import('./db.mjs')
   const db = openDb()
   seedTwoTenants(db)
+  if (TOKEN_SOURCE === 'dev-defaults') {
+    console.warn('[cube-agent] WARN: 使用开发默认 token（tok_a/tok_b）。公网部署必须设置 CUBE_TOKENS。')
+  }
   const port = Number(process.env.PORT ?? 8787)
   createApp(db).listen(port, () => console.log(`cube-agent gateway on http://127.0.0.1:${port}`))
 }
