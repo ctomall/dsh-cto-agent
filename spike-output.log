@@ -1,0 +1,86 @@
+{
+  "toolPlugins": {
+    "dsh-tool-fs": {
+      "name": "tool-fs",
+      "inject": [
+        "tools",
+        "fs",
+        "systemPrompt",
+        "workingDirectory"
+      ]
+    },
+    "dsh-tool-present": {
+      "name": "tool-present",
+      "inject": [
+        "tools",
+        "fs",
+        "sessionProjections",
+        "workingDirectory"
+      ]
+    },
+    "dsh-tool-goal": {
+      "name": "tool-goal",
+      "inject": [
+        "agents",
+        "goals",
+        "tools",
+        "systemPrompt",
+        "sessionProjections"
+      ]
+    },
+    "dsh-tool-jobs": {
+      "name": "tool-jobs",
+      "inject": [
+        "tools",
+        "jobs",
+        "systemPrompt"
+      ]
+    },
+    "dsh-tool-ask-user": {
+      "name": "tool-ask-user",
+      "inject": [
+        "tools",
+        "userQuestions"
+      ]
+    },
+    "dsh-tool-schedule": {
+      "name": "tool-schedule",
+      "inject": [
+        "tools"
+      ]
+    }
+  },
+  "chain": {
+    "systemPrompt": {
+      "present": true
+    },
+    "tools": {
+      "present": true
+    },
+    "scheduleService": {
+      "class": "ScheduleService",
+      "inject": [
+        "agents",
+        "sessions",
+        "storageDomain",
+        "sessionController",
+        "sessionPersistence"
+      ],
+      "presentAfterPlugin": false,
+      "presentAfterLoadAttempt": false,
+      "note": "inject 的 5 个服务本进程均未提供，插件保持未激活状态，不报错也不提供 schedule"
+    }
+  },
+  "assertions": {
+    "afterToolLoad": {
+      "toolCount": 0,
+      "names": [],
+      "hasScheduleCreate": false
+    },
+    "afterToolUnload": {
+      "toolCount": 0
+    }
+  },
+  "blocked": null
+}
+SPIKE_PARTIAL: 服务插件可加载、工具插件未激活（缺 schedule 依赖链）

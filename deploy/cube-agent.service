@@ -1,0 +1,18 @@
+[Unit]
+Description=Cube Agent Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pro
+WorkingDirectory=/home/pro/dsh/cube-agent/impl
+Environment=PORT=8787
+ExecStart=/usr/bin/node src/server.mjs
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
