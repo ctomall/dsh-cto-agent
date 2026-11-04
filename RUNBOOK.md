@@ -35,6 +35,13 @@ scripts/upgrade.sh              # 拉取 → 跑全量测试 → 重启 → 等 
 
 手工回滚：`git reset --hard <before> && sudo systemctl restart cube-agent.service`。
 
+## 2.5 数据与备份
+
+- 库文件：`/var/lib/cube-agent/cube.db`（WAL 模式，同目录 `-wal`/`-shm`）
+- 备份：`sqlite3 /var/lib/cube-agent/cube.db ".backup '/var/lib/cube-agent/backup-$(date +%F).db'"`
+- 恢复：停服 → 用备份覆盖 `cube.db` → 删 `-wal`/`-shm` → 起服
+- 已验证：新建会话 → 重启服务 → 会话仍在
+
 ## 3. 故障演练（每季度至少一次）
 
 | 演练 | 操作 | 期望 |
@@ -59,4 +66,4 @@ scripts/upgrade.sh              # 拉取 → 跑全量测试 → 重启 → 等 
 |---|---|---|
 | Cloudflare Access | **未配置**（缺 `CLOUDFLARE_API_TOKEN` / `CF_ACCOUNT_ID` / `CF_ZONE_ID`） | 挡人的是应用层口令门，不是 CF 身份层 |
 | 真实模型 | **未接通**（缺 `MODEL_*`） | 线上 `driver: fake`，事件序列由假模型决策 |
-| 数据持久化 | 内存 SQLite | 重启即丢数据 |
+| 数据备份 | 未自动化 | SQLite 已落盘 `/var/lib/cube-agent/cube.db`（WAL），但无定时备份/恢复演练 |
