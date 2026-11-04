@@ -14,6 +14,7 @@ import { createDriverFromEnv } from './model.mjs'
 import { createGrants } from './grants.mjs'
 import { createRateLimiter, LIMITS, bucketFor, clientIp } from './ratelimit.mjs'
 import { createGate, LOGIN_HTML } from './gate.mjs'
+import { createMetrics } from './metrics.mjs'
 
 // 启动时快照：升级后进程若不重启，这个值不会变——正好用来证明"升级到底生效没有"
 export const BOOT_SHA = (() => {
@@ -114,6 +115,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? '/tmp/cube-agent-workspace'
   const { driver, source: driverSource } = createDriverFromEnv()
   const limiter = createRateLimiter()
+  const metrics = createMetrics()
   const gate = createGate({ password: process.env.APP_PASSWORD, secret: process.env.APP_SESSION_SECRET })
   if (gate) console.log('[cube-agent] 身份门：已开启（APP_PASSWORD）')
   const grants = createGrants(db)
@@ -138,6 +140,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const { limit, windowMs } = LIMITS[bucket]
       const r = limiter.check(`${clientIp(req)}:${bucket}`, limit, windowMs)
       if (!r.ok) {
+        metrics.inc('rate_limited_total', { bucket })
         res.writeHead(429, {
           'content-type': 'application/json; charset=utf-8',
           'retry-after': String(r.retryAfter),
@@ -165,12 +168,21 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     }
     if (req.method === 'POST' && url.pathname === '/login') {
       const form = await readForm(req)
+      if (gate && !gate.checkPassword(form.password)) metrics.inc('login_failures_total')
       if (gate && gate.checkPassword(form.password)) {
         res.writeHead(302, { location: '/', 'set-cookie': gate.cookie(), 'cache-control': 'no-store' })
         return res.end()
       }
       res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
       return res.end(LOGIN_HTML.replace('<!--ERR-->', '<p class="err">口令不正确</p>'))
+    }
+
+    // —— 指标（与页面同门禁，避免公网裸看流量）——
+    if (req.method === 'GET' && url.pathname === '/metrics') {
+      metrics.set('model_real', {}, driver.name.startsWith('fake') ? 0 : 1)
+      metrics.set('session_grants', {}, Number(db.prepare('select count(*) c from session_grants').get().c))
+      res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' })
+      return res.end(metrics.render())
     }
 
     // —— 模型状态（① 的可观测性：一眼看出线上是真模型还是假模型）——
@@ -224,6 +236,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
       const runId = `r${Date.now()}${(seq++).toString(36)}`
       // 模型 loop：事件序列由 driver 决策产生，不是硬编码；跑到审批处会挂起
+      metrics.inc('runs_created_total', { driver: driver.name.startsWith('fake') ? 'fake' : 'real' })
       await loop.start({ runId, tenantId: ctx.tenantId, sessionId, input: String(body.input ?? '') })
       return reply(res, json(202, { runId, sessionId, driver: driver.name }))
     }
@@ -249,6 +262,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (!owned) return reply(res, json(404, { error: 'not_found' }))
       const body = await readJson(req)
       const revoked = grants.revoke({ tenantId: ctx.tenantId, sessionId, tool: body.tool ? String(body.tool) : null })
+      if (revoked > 0) metrics.inc('grants_revoked_total', {}, revoked)
       db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
         .run(ctx.tenantId, ctx.userId, 'session_grant_revoked', JSON.stringify({ sessionId, tool: body.tool ?? '*' , revoked }), new Date().toISOString())
       return reply(res, json(200, { revoked }))
@@ -263,6 +277,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (!rc.status(runId)) return reply(res, json(404, { error: 'not_found' }))
       const body = await readJson(req)
       const decision = ['deny', 'allow_session'].includes(body.decision) ? body.decision : 'allow_once'
+      metrics.inc('approvals_total', { decision })
       const out = await loop.resume({ runId, decision })
       return reply(res, json(200, { ...out, decision }))
     }
