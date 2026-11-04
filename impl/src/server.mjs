@@ -315,7 +315,9 @@ function reply(res, { status, body }) {
 // 直接运行时监听（测试不经过这里）
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const { openDb, seedTwoTenants } = await import('./db.mjs')
-  const db = openDb()
+  const dbPath = process.env.DB_PATH ?? '/var/lib/cube-agent/cube.db'
+  const db = openDb(dbPath)
+  console.log(`[cube-agent] db: ${dbPath}`)
   seedTwoTenants(db)
   if (TOKEN_SOURCE === 'dev-defaults') {
     console.warn('[cube-agent] WARN: 使用开发默认 token（tok_a/tok_b）。公网部署必须设置 CUBE_TOKENS。')
