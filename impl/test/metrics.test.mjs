@@ -37,3 +37,16 @@ test('HTTP /metrics 暴露关键指标', async (t) => {
   }
   assert.match(body, /model_real 0/, '未接真实模型时必须是 0')
 })
+
+test('零值指标也要出现（区分"没数据"与"没这个指标"）', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const body = await (await fetch(`http://127.0.0.1:${app.address().port}/metrics`)).text()
+  assert.match(body, /runs_created_total\{driver="fake"\} 0/)
+  assert.match(body, /approvals_total\{decision="allow_session"\} 0/)
+  assert.match(body, /rate_limited_total\{bucket="login"\} 0/)
+})

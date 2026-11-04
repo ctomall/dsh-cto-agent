@@ -116,6 +116,13 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   const { driver, source: driverSource } = createDriverFromEnv()
   const limiter = createRateLimiter()
   const metrics = createMetrics()
+  // 0 值也要出现在 /metrics 里，否则"没数据"和"没这个指标"分不清
+  metrics.inc('runs_created_total', { driver: 'fake' }, 0)
+  metrics.inc('runs_created_total', { driver: 'real' }, 0)
+  for (const d of ['allow_once', 'allow_session', 'deny']) metrics.inc('approvals_total', { decision: d }, 0)
+  for (const b of ['api', 'runs', 'upgrade', 'login']) metrics.inc('rate_limited_total', { bucket: b }, 0)
+  metrics.inc('login_failures_total', {}, 0)
+  metrics.inc('grants_revoked_total', {}, 0)
   const gate = createGate({ password: process.env.APP_PASSWORD, secret: process.env.APP_SESSION_SECRET })
   if (gate) console.log('[cube-agent] 身份门：已开启（APP_PASSWORD）')
   const grants = createGrants(db)
