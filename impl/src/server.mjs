@@ -12,6 +12,7 @@ import { AgentLoop } from './loop.mjs'
 import { createTools } from './tools.mjs'
 import { createDriverFromEnv } from './model.mjs'
 import { createGrants } from './grants.mjs'
+import { createRateLimiter, LIMITS, bucketFor, clientIp } from './ratelimit.mjs'
 
 // 启动时快照：升级后进程若不重启，这个值不会变——正好用来证明"升级到底生效没有"
 export const BOOT_SHA = (() => {
@@ -103,6 +104,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   let seq = 0
   const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? '/tmp/cube-agent-workspace'
   const { driver, source: driverSource } = createDriverFromEnv()
+  const limiter = createRateLimiter()
   const grants = createGrants(db)
   const loop = new AgentLoop({
     rc,
@@ -114,6 +116,22 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   console.log(`[cube-agent] model driver: ${driver.name} (${driverSource})`)
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local')
+
+    // —— 限流：先于一切业务逻辑，避免打穿到数据库/模型 ——
+    const bucket = bucketFor(url.pathname, req.method)
+    if (bucket) {
+      const { limit, windowMs } = LIMITS[bucket]
+      const r = limiter.check(`${clientIp(req)}:${bucket}`, limit, windowMs)
+      if (!r.ok) {
+        res.writeHead(429, {
+          'content-type': 'application/json; charset=utf-8',
+          'retry-after': String(r.retryAfter),
+          'cache-control': 'no-store',
+        })
+        return res.end(JSON.stringify({ error: 'rate_limited', bucket, limit: r.limit, retryAfter: r.retryAfter }))
+      }
+      res.setHeader('x-ratelimit-remaining', String(r.remaining))
+    }
 
     // —— 静态前端 ——
     if (req.method === 'GET' && (url.pathname === '/' || /^\/(app\.(js|css)|favicon\.svg)$/.test(url.pathname))) {
@@ -172,6 +190,10 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
     // —— 升级 ——
     if (req.method === 'POST' && url.pathname === '/api/admin/upgrade') {
+      const allow = (process.env.UPGRADE_ALLOW_IPS ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+      if (allow.length > 0 && !allow.includes(clientIp(req))) {
+        return reply(res, json(403, { error: 'ip_not_allowed' }))
+      }
       const result = await upgradeRoute(req)
       reply(res, result)
       if (result.status === 200 && result.body?.upToDate === false && process.env.UPGRADE_EXIT_AFTER === '1') {
