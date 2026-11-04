@@ -2,3 +2,6 @@ node_modules/
 *.log.tmp
 .DS_Store
 tmp/
+
+# 运行时口令（含 token），绝不入库
+.runtime-tokens
