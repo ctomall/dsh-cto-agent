@@ -168,6 +168,14 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return res.end(LOGIN_HTML.replace('<!--ERR-->', '<p class="err">口令不正确</p>'))
     }
 
+    // —— 模型状态（① 的可观测性：一眼看出线上是真模型还是假模型）——
+    if (req.method === 'GET' && url.pathname === '/api/model/status') {
+      if (gate && !gate.verify(req.headers.cookie)) return reply(res, json(401, { error: 'unauthenticated' }))
+      const ctx = resolveContext(req.headers?.authorization)
+      if (ctx.error) return reply(res, ctx.error)
+      return reply(res, json(200, { driver: driver.name, source: driverSource, real: !driver.name.startsWith('fake') }))
+    }
+
     // —— 探活 ——
     if (req.method === 'GET' && url.pathname === '/healthz') {
       return reply(res, json(200, { ok: true, driver: driver.name }))

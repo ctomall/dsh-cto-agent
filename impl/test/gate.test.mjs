@@ -72,3 +72,12 @@ test('伪造 Cookie 不放行', async (t) => {
   const r = await fetch(`${base}/`, { headers: { cookie: 'cube_session=deadbeef' }, redirect: 'manual' })
   assert.equal(r.status, 302)
 })
+
+test('/api/model/status 明确标注是否为真实模型', async (t) => {
+  const { base } = await boot(t)
+  const r = await fetch(`${base}/api/model/status`, { headers: { authorization: 'Bearer tok_a' } })
+  assert.equal(r.status, 200)
+  const j = await r.json()
+  assert.equal(typeof j.driver, 'string')
+  assert.equal(j.real, !j.driver.startsWith('fake'))
+})
