@@ -10,6 +10,14 @@ export class UpgradeError extends Error {
   }
 }
 
+const TEST_FILES = [
+  'impl/test/tenant-isolation.test.mjs',
+  'impl/test/sse-resume.test.mjs',
+  'impl/test/upgrade.test.mjs',
+  'impl/test/ratelimit.test.mjs',
+  'impl/test/gate.test.mjs',
+]
+
 function defaultExec(repoDir) {
   return (args) =>
     new Promise((resolve, reject) => {
@@ -20,8 +28,17 @@ function defaultExec(repoDir) {
     })
 }
 
-export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', runTests = false, exec } = {}) {
+export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', runTests = false, exec, runCommand } = {}) {
   const run = exec ?? defaultExec(repoDir)
+  const cmd =
+    runCommand ??
+    ((args) =>
+      new Promise((resolve, reject) => {
+        execFile('node', args, { cwd: repoDir, timeout: 180_000 }, (err, stdout, stderr) => {
+          if (err) reject(new Error(`${(stderr || err.message).trim()}`.slice(0, 400)))
+          else resolve(String(stdout).trim())
+        })
+      }))
   let inFlight = false
 
   return async function upgradeOnce() {
@@ -48,14 +65,21 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
       await run(['pull', '--ff-only', remote, branch]).catch((e) => {
         throw new UpgradeError('pull_failed', e.message, 500)
       })
-      const after = await run(['rev-parse', '--short', 'HEAD'])
+      let after = await run(['rev-parse', '--short', 'HEAD'])
 
       let tests = 'skipped'
       if (runTests) {
-        tests = await run(['--version']).then(() => 'passed').catch(() => 'failed')
+        try {
+          await cmd(['--test', ...TEST_FILES])
+          tests = 'passed'
+        } catch (e) {
+          // 拉下来的代码没通过测试：必须回滚，不能把坏版本留在磁盘上
+          await run(['reset', '--hard', before]).catch(() => {})
+          throw new UpgradeError('tests_failed_rolled_back', `测试失败，已回滚到 ${before}：${e.message}`, 500)
+        }
       }
 
-      return { ok: true, upToDate: false, before, after, behind, tests }
+      return { ok: true, upToDate: false, before, after, behind, tests, rolledBack: false }
     } finally {
       inFlight = false
     }

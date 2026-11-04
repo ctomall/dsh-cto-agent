@@ -344,3 +344,37 @@ test('跨租户撤销授权 → 404', async (t) => {
   })
   assert.equal(r.status, 404)
 })
+
+test('拉取后测试失败 → 自动回滚到 before', async () => {
+  const { createUpgrade, UpgradeError } = await import('../src/upgrade.mjs')
+  const calls = []
+  const exec = async (args) => {
+    calls.push(args.join(' '))
+    if (args[0] === 'rev-parse' && !args.includes('--short')) return 'true'
+    if (args[0] === 'status') return ''
+    if (args[0] === 'rev-parse') return calls.filter((c) => c.startsWith('rev-parse --short')).length === 1 ? 'aaa' : 'bbb'
+    if (args[0] === 'rev-list') return '1'
+    return ''
+  }
+  const runCommand = async () => { throw new Error('1 test failed') }
+  const up = createUpgrade({ repoDir: '/repo', exec, runCommand, runTests: true })
+  await assert.rejects(() => up(), (e) => e instanceof UpgradeError && e.code === 'tests_failed_rolled_back')
+  assert.ok(calls.includes('reset --hard aaa'), '必须回滚到 before')
+})
+
+test('测试通过则不回滚', async () => {
+  const { createUpgrade } = await import('../src/upgrade.mjs')
+  const calls = []
+  const exec = async (args) => {
+    calls.push(args.join(' '))
+    if (args[0] === 'rev-parse' && !args.includes('--short')) return 'true'
+    if (args[0] === 'status') return ''
+    if (args[0] === 'rev-parse') return calls.filter((c) => c.startsWith('rev-parse --short')).length === 1 ? 'aaa' : 'bbb'
+    if (args[0] === 'rev-list') return '1'
+    return ''
+  }
+  const up = createUpgrade({ repoDir: '/repo', exec, runCommand: async () => 'ok', runTests: true })
+  const r = await up()
+  assert.equal(r.tests, 'passed')
+  assert.equal(calls.some((c) => c.startsWith('reset')), false)
+})

@@ -61,7 +61,11 @@ git pull --ff-only "$REMOTE" "$BRANCH"
 
 if [ "${SKIP_TESTS:-0}" != "1" ]; then
   echo "== 跑测试"
-  node --test impl/test/tenant-isolation.test.mjs impl/test/sse-resume.test.mjs
+  if ! node --test impl/test/*.test.mjs; then
+    echo "FAIL: 新版本测试未通过 —— 回滚到 $BEFORE（不重启、不留坏版本）"
+    git reset --hard "$BEFORE"
+    exit 5
+  fi
 fi
 
 AFTER="$(git rev-parse --short HEAD)"
@@ -76,7 +80,13 @@ if systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE}"; then
     if curl -s -o /dev/null -m 3 "http://127.0.0.1:${PORT:-8787}/healthz"; then ready=$i; break; fi
     sleep 1
   done
-  [ "$ready" -gt 0 ] && echo "== 就绪（${ready}s）" || echo "WARN: 40s 内 /healthz 未就绪"
+  if [ "$ready" -eq 0 ]; then
+    echo "FAIL: 重启后 40s 内 /healthz 未就绪 —— 回滚到 $BEFORE"
+    git reset --hard "$BEFORE"
+    systemctl restart "$SERVICE"
+    exit 6
+  fi
+  echo "== 就绪（${ready}s）"
   systemctl is-active "$SERVICE"
 else
   echo "WARN: 未安装 ${SERVICE}，服务未重启（手动：node impl/src/server.mjs）"

@@ -36,6 +36,7 @@ const upgradeRoute = createUpgradeRoute({
     repoDir: REPO_ROOT,
     remote: process.env.UPGRADE_REMOTE ?? 'origin',
     branch: process.env.UPGRADE_BRANCH ?? 'main',
+    runTests: process.env.UPGRADE_RUN_TESTS === '1',
   }),
 })
 
