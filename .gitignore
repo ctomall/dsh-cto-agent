@@ -5,3 +5,5 @@ tmp/
 
 # 运行时口令（含 token），绝不入库
 .runtime-tokens
+
+.runtime-app-password

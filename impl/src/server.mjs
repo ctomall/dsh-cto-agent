@@ -13,6 +13,7 @@ import { createTools } from './tools.mjs'
 import { createDriverFromEnv } from './model.mjs'
 import { createGrants } from './grants.mjs'
 import { createRateLimiter, LIMITS, bucketFor, clientIp } from './ratelimit.mjs'
+import { createGate, LOGIN_HTML } from './gate.mjs'
 
 // 启动时快照：升级后进程若不重启，这个值不会变——正好用来证明"升级到底生效没有"
 export const BOOT_SHA = (() => {
@@ -39,6 +40,13 @@ const upgradeRoute = createUpgradeRoute({
 })
 
 const json = (status, body) => ({ status, body })
+
+const readForm = (req) =>
+  new Promise((res) => {
+    let raw = ''
+    req.on('data', (c) => (raw += c))
+    req.on('end', () => res(Object.fromEntries(new URLSearchParams(raw))))
+  })
 
 const readJson = (req) =>
   new Promise((res) => {
@@ -105,6 +113,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? '/tmp/cube-agent-workspace'
   const { driver, source: driverSource } = createDriverFromEnv()
   const limiter = createRateLimiter()
+  const gate = createGate({ password: process.env.APP_PASSWORD, secret: process.env.APP_SESSION_SECRET })
+  if (gate) console.log('[cube-agent] 身份门：已开启（APP_PASSWORD）')
   const grants = createGrants(db)
   const loop = new AgentLoop({
     rc,
@@ -131,6 +141,36 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         return res.end(JSON.stringify({ error: 'rate_limited', bucket, limit: r.limit, retryAfter: r.retryAfter }))
       }
       res.setHeader('x-ratelimit-remaining', String(r.remaining))
+    }
+
+    // —— 身份门（Cloudflare Access 未配置时的兜底；未配 APP_PASSWORD 时整体关闭）——
+    if (gate) {
+      const open = url.pathname === '/login' || url.pathname === '/api/version' || url.pathname === '/healthz'
+      if (!open && !gate.verify(req.headers.cookie)) {
+        if (url.pathname.startsWith('/api/')) return reply(res, json(401, { error: 'unauthenticated' }))
+        res.writeHead(302, { location: '/login', 'cache-control': 'no-store' })
+        return res.end()
+      }
+    }
+
+    // —— 登录页与提交 ——
+    if (req.method === 'GET' && url.pathname === '/login') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+      return res.end(LOGIN_HTML.replace('<!--ERR-->', ''))
+    }
+    if (req.method === 'POST' && url.pathname === '/login') {
+      const form = await readForm(req)
+      if (gate && gate.checkPassword(form.password)) {
+        res.writeHead(302, { location: '/', 'set-cookie': gate.cookie(), 'cache-control': 'no-store' })
+        return res.end()
+      }
+      res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+      return res.end(LOGIN_HTML.replace('<!--ERR-->', '<p class="err">口令不正确</p>'))
+    }
+
+    // —— 探活 ——
+    if (req.method === 'GET' && url.pathname === '/healthz') {
+      return reply(res, json(200, { ok: true, driver: driver.name }))
     }
 
     // —— 静态前端 ——
