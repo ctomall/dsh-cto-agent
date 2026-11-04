@@ -1,4 +1,4 @@
-# dsh-cube-agent（实现侧）
+# dsh-cto-agent（实现侧）
 
 《Cube Agent 类产品重建提示词》的实现仓库。规格文档在 `../cube-agent-rebuild-prompt-v10.md`（不进本仓库，属产品文档）。
 
@@ -53,7 +53,9 @@ scripts/upgrade.sh           # 拉取 → 跑测试 → 重启服务
 
 ## 远程仓库
 
+> 本地目录名保留为 `cube-agent`（历史原因），**远程仓库名使用 `cto`**：`dsh-cto-agent`。
+
 ```bash
-git remote add origin git@github.com:ctomall/dsh-cube-agent.git
+git remote add origin git@github.com:ctomall/dsh-cto-agent.git
 git push -u origin main
 ```
