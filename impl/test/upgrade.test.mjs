@@ -113,3 +113,11 @@ test('CUBE_TOKENS 注入时以 env 为准，且拒绝空集合', async () => {
   assert.equal(r.tokens.has('tok_a'), false)
   assert.throws(() => loadTokens({ CUBE_TOKENS: '{}' }), /拒绝启动/)
 })
+
+test('/api/version 返回启动快照 SHA', async () => {
+  const { handleRequest } = await import('../src/server.mjs')
+  const { openDb } = await import('../src/db.mjs')
+  const r = handleRequest(openDb(), { method: 'GET', url: '/api/version', headers: {} })
+  assert.equal(r.status, 200)
+  assert.match(r.body.sha, /^[0-9a-f]{7,}$|^unknown$/)
+})

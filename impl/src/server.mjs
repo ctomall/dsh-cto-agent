@@ -3,6 +3,19 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveContext, auditDenial, TOKEN_SOURCE } from './context.mjs'
 import { createUpgrade, createUpgradeRoute } from './upgrade.mjs'
+import { execFileSync } from 'node:child_process'
+
+// 启动时快照：升级后进程若不重启，这个值不会变——正好用来证明"升级到底生效没有"
+export const BOOT_SHA = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'),
+      encoding: 'utf8',
+    }).trim()
+  } catch {
+    return 'unknown'
+  }
+})()
 
 // 仓库根 = impl/ 的上一级；升级只作用于本仓库
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -19,10 +32,15 @@ const json = (status, body) => ({ status, body })
 
 // 纯函数式路由：既能被 http server 调用，也能被测试直接调用，避免测试依赖端口。
 export function handleRequest(db, req) {
+  const url = new URL(req.url, 'http://local')
+
+  // 探活：只暴露启动快照 SHA，不需要身份
+  if (req.method === 'GET' && url.pathname === '/api/version') {
+    return json(200, { sha: BOOT_SHA })
+  }
+
   const ctx = resolveContext(req.headers?.authorization)
   if (ctx.error) return ctx.error
-
-  const url = new URL(req.url, 'http://local')
   const m = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname)
 
   if (req.method === 'GET' && url.pathname === '/api/me') {
@@ -64,13 +82,18 @@ export function handleRequest(db, req) {
 export function createApp(db) {
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local')
-    const result =
-      req.method === 'POST' && url.pathname === '/api/admin/upgrade'
-        ? await upgradeRoute(req)          // 在线一键升级：token 鉴权 + 单飞锁 + 仅 ff-only
-        : handleRequest(db, req)
+    const isUpgrade = req.method === 'POST' && url.pathname === '/api/admin/upgrade'
+    const result = isUpgrade
+      ? await upgradeRoute(req)          // 在线一键升级：token 鉴权 + 单飞锁 + 仅 ff-only
+      : handleRequest(db, req)
     const { status, body } = result
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify(body))
+
+    // 升级已落盘但进程仍是旧代码：退出由 systemd 拉起，才算真正升级完成
+    if (isUpgrade && status === 200 && body?.upToDate === false && process.env.UPGRADE_EXIT_AFTER === '1') {
+      res.on('finish', () => setTimeout(() => { console.log('[cube-agent] upgrade applied, exiting for restart'); process.exit(0) }, 200))
+    }
   })
 }
 
