@@ -79,3 +79,7 @@ curl -X POST -H "x-upgrade-token: <你的口令>" http://127.0.0.1:8787/api/admi
 git remote add origin git@github.com:ctomall/dsh-cto-agent.git
 git push -u origin main
 ```
+
+## 演练
+
+- 2026-11-04 18:31:47：HTTP 触发 ff-only 升级演练
