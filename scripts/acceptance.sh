@@ -58,7 +58,7 @@ if echo "$ms" | grep -q '"real":true'; then
     echo "$drv" | grep -q '^fake' && no "driver 非 fake" "$drv" || ok "driver 非 fake" "$drv"
   else no "创建 run" "$body"; fi
 else
-  sk "① 真实模型" "未配置 MODEL_*（$(echo "$ms" | head -c 60)）"
+  sk "① 真实模型" "未配置 MODEL_*，放行见 HANDOFF.md ①（$(echo "$ms" | head -c 48)）"
 fi
 
 echo "== ② 会话级审批 scope"
@@ -90,7 +90,7 @@ if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CF_ACCOUNT_ID:-}" ]; then
   apps=$(curl -s -m 15 -H "authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/access/apps")
   echo "$apps" | grep -q 'cto.ila3.top' && ok "Cloudflare Access 应用" "已存在" || sk "Cloudflare Access 应用" "已配置凭据但未找到应用"
 else
-  sk "Cloudflare Access" "未配置 CLOUDFLARE_API_TOKEN / CF_ACCOUNT_ID"
+  sk "Cloudflare Access" "未配置 CLOUDFLARE_API_TOKEN / CF_ACCOUNT_ID（放行见 HANDOFF.md ③）"
 fi
 
 echo "== ④ 登录爆破限流（放最后，会占用登录配额）"
