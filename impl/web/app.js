@@ -126,6 +126,8 @@ function handleEvent(type, p) {
   } else if (type === 'approval.requested') {
     approvalCard(p)
     setStatus('等待你确认', false)
+    // 截图模式：拿到审批卡后断开长连接，让页面进入 network idle
+    if (qs.get('shot') === '1') setTimeout(() => state.es?.close(), 300)
   } else if (type === 'approval.decided') {
     document.querySelectorAll('.approval').forEach((c) => {
       if (!c.dataset.decision) c.dataset.decision = p.decision
