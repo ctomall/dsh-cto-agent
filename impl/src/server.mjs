@@ -232,7 +232,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 创建 run（跑到审批处停下）——
     if (req.method === 'POST' && url.pathname === '/api/runs') {
       const ctx = resolveContext(req.headers?.authorization)
-      if (ctx.error) return reply(res, ctx)
+      if (ctx.error) return reply(res, ctx.error)
       const body = await readJson(req)
       const sessionId = String(body.sessionId ?? 's_a1')
       // 会话归属必须与 tenant 一致，否则按不存在处理（不泄露是否存在）
@@ -251,7 +251,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 新建会话（验收与前端都需要；租户由 ctx 决定，不接受外部指定）——
     if (req.method === 'POST' && url.pathname === '/api/sessions') {
       const ctx = resolveContext(req.headers?.authorization)
-      if (ctx.error) return reply(res, ctx)
+      if (ctx.error) return reply(res, ctx.error)
       const body = await readJson(req)
       const id = `s_${Math.random().toString(16).slice(2, 10)}`
       const title = String(body.title ?? '新会话').slice(0, 60)
@@ -263,7 +263,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     const rv = /^\/api\/sessions\/([^/]+)\/grants\/revoke$/.exec(url.pathname)
     if (req.method === 'POST' && rv) {
       const ctx = resolveContext(req.headers?.authorization)
-      if (ctx.error) return reply(res, ctx)
+      if (ctx.error) return reply(res, ctx.error)
       const sessionId = decodeURIComponent(rv[1])
       const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
       if (!owned) return reply(res, json(404, { error: 'not_found' }))
@@ -279,7 +279,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     const ap = /^\/api\/approvals\/([^/]+)$/.exec(url.pathname)
     if (req.method === 'POST' && ap) {
       const ctx = resolveContext(req.headers?.authorization)
-      if (ctx.error) return reply(res, ctx)
+      if (ctx.error) return reply(res, ctx.error)
       const runId = decodeURIComponent(ap[1])
       if (!rc.status(runId)) return reply(res, json(404, { error: 'not_found' }))
       const body = await readJson(req)
