@@ -52,6 +52,26 @@ scripts/upgrade.sh              # 拉取 → 跑全量测试 → 重启 → 等 
 | 限流失效 | 连打 `/api/version` 65 次 | 第 61 次 429 + `retry-after` |
 | 身份门失效 | 无 Cookie 访问 `/api/sessions` | 401；访问 `/` → 302 `/login` |
 
+## 3.5 公网延迟与抖动（已知问题）
+
+现象：`https://cto.ila3.top` 单请求 1.4–20s，偶发 `000`（超时）；本机 `127.0.0.1:8787` **0.4ms**。
+
+实测定位（2026-11-05）：
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| 本机 healthz | 0.0004s | 应用不是瓶颈 |
+| 出网到 Cloudflare 边缘 | tcp 0.26s / tls 0.53s | 链路 RTT 偏高 |
+| IPv6 出网 | **失败** | `curl -6` 直接 000 |
+| 1.1.1.1:443 | 不可达 | 出网受限 |
+| TCP 重传率 | ~0.86%（`TcpRetransSegs/TcpOutSegs`） | 有丢包 |
+| 隧道 QUIC RTT | ~271ms，有 buffered packets | 抖动来源 |
+
+已做的调整：`/etc/cloudflared/cto.yml` 增加 `edge-ip-version: "4"`（避免向不可用的 IPv6 反复尝试），`protocol: quic`。
+效果：中位数从 ~4.8s 降到 1.4–2.8s（多次采样波动），**但超时仍会发生**——属链路层问题，本机无法根治。
+
+运维影响：**验收与巡检固定走本机**（`scripts/acceptance.sh http://127.0.0.1:8787`）；公网只做“可达性”抽查，不作为判定依据。
+
 ## 4. 上线前检查清单
 
 - [ ] `node --test impl/test/*.test.mjs` 全绿
