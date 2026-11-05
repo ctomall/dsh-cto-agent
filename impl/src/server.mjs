@@ -142,6 +142,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     driver,
     grants,
     workspaceRoot: WORKSPACE_ROOT,
+    timeoutMs: Number(process.env.AGENT_TIMEOUT_MS ?? 120_000),
     loadHistory: ({ tenantId, sessionId, limit }) =>
       db
         .prepare('select role, content from messages where tenant_id = ? and session_id = ? order by rowid desc limit ?')

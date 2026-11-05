@@ -27,7 +27,7 @@ export function createFakeDriver() {
 export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000, stream = true }) {
   return {
     name: `openai:${model}`,
-    async complete({ messages, tools, onDelta }) {
+    async complete({ messages, tools, onDelta, signal }) {
       const body = {
         model,
         messages: messages.map((m) =>
@@ -41,14 +41,31 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
       }
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+      if (signal) signal.addEventListener('abort', () => ctrl.abort(), { once: true })
       try {
-        const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(body),
-          signal: ctrl.signal,
-        })
-        if (!res.ok) throw new Error(`provider ${res.status}: ${(await res.text()).slice(0, 200)}`)
+        const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`
+        const maxRetries = 2
+        let res
+        for (let attempt = 0; ; attempt++) {
+          try {
+            res = await fetch(url, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+              body: JSON.stringify(body),
+              signal: ctrl.signal,
+            })
+          } catch (e) {
+            if (attempt >= maxRetries || ctrl.signal.aborted) throw e
+            await new Promise((r) => setTimeout(r, 150 * (attempt + 1)))
+            continue
+          }
+          if (res.ok) break
+          // 4xx 是请求问题，重试无意义；5xx/429 才退避重试
+          if ((res.status < 500 && res.status !== 429) || attempt >= maxRetries) {
+            throw new Error(`provider ${res.status}: ${(await res.text()).slice(0, 200)}`)
+          }
+          await new Promise((r) => setTimeout(r, 200 * (attempt + 1)))
+        }
 
         // 流式：逐块推 text.delta（事件序列由模型输出驱动），并累积 tool_calls 分片
         if (stream && onDelta && String(res.headers.get('content-type') || '').includes('text/event-stream')) {

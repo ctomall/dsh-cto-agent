@@ -1,6 +1,6 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10 }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000 }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
@@ -10,6 +10,7 @@ export class AgentLoop {
     this.store = store
     this.loadHistory = loadHistory
     this.historyLimit = historyLimit
+    this.timeoutMs = timeoutMs
     this.maxSteps = maxSteps
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
   }
@@ -37,7 +38,23 @@ export class AgentLoop {
       streamed = true
       this.rc.emitTo(runId, 'text.delta', { text: t })
     }
-    const decision = await this.driver.complete({ messages, tools: this.tools.schema, onDelta })
+    // run 级超时：provider 卡住时不能让 run 永远挂在 running
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), this.timeoutMs)
+    let decision
+    try {
+      decision = await this.driver.complete({ messages, tools: this.tools.schema, onDelta, signal: ctrl.signal })
+    } catch (e) {
+      const timedOut = ctrl.signal.aborted
+      this.rc.transition(runId, 'failed')
+      this.rc.emitTo(runId, 'run.failed', {
+        runId,
+        error: timedOut ? `timeout after ${this.timeoutMs}ms` : String(e.message ?? e),
+      })
+      return { status: 'failed' }
+    } finally {
+      clearTimeout(timer)
+    }
 
     if (decision.type === 'final') {
       if (decision.text) {
