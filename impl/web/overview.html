@@ -3,62 +3,72 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>cube-agent · 系统总览</title>
+<title>cube-agent · 系统断面</title>
 <link rel="stylesheet" href="/overview.css" />
 </head>
 <body>
-<div class="app">
-  <nav class="rail">
-    <div class="brand">cube<span>·agent</span></div>
-    <div class="rail-group">
-      <div class="rail-label">工作区</div>
-      <a class="rail-item" id="to-workbench" href="/">工作台</a>
-      <a class="rail-item active" href="/overview">总览</a>
-    </div>
-    <div class="rail-foot">
-      <span id="build" class="mono">build -</span>
-      <span id="tenant" class="mono">-</span>
-    </div>
-  </nav>
-
-  <main class="main">
-    <header class="topbar">
-      <h1>系统总览</h1>
-      <div class="top-actions">
-        <span class="chip-state" id="driver"><i class="dot"></i><span>模型 -</span></span>
-        <button class="btn" id="refresh" type="button">刷新</button>
+<div class="frame">
+  <div class="sheet">
+    <header class="sheet-head">
+      <div>
+        <h1>系统断面</h1>
+        <div class="sub mono" id="sheet-sub">cube-agent · 分层断面 A–A</div>
+      </div>
+      <div class="marks">
+        <div class="stamp" id="stamp" hidden>模型未接入</div>
+        <button class="hand" id="refresh" type="button">重画</button>
       </div>
     </header>
 
-    <div class="content">
-      <section class="layers-wrap">
-        <div class="section-head">
-          <h2>分层</h2>
-          <span class="muted mono" id="layers-meta">-</span>
+    <div class="body">
+      <section class="plate plate-stack">
+        <div class="plate-head">
+          <span class="mono">断面 A–A · 运行栈</span>
+          <span class="mono dim" id="stack-meta">-</span>
         </div>
-        <div class="layers" id="layers"></div>
+        <div class="stack" id="layers"></div>
       </section>
 
-      <section class="ledger">
-        <div class="section-head">
-          <h2>最近活动</h2>
-          <span class="muted mono" id="audit-count">-</span>
+      <section class="plate plate-pending">
+        <div class="plate-head">
+          <span class="mono">待审批</span>
+          <span class="mono dim" id="pending-count">-</span>
         </div>
-        <ol class="rows" id="audit"></ol>
+        <div class="pending" id="pending"></div>
+      </section>
+
+      <section class="plate plate-gaps">
+        <div class="plate-head">
+          <span class="mono">缺口标注 · 文档有 / 代码无</span>
+          <span class="mono dim" id="gaps-meta">-</span>
+        </div>
+        <div class="gaps">
+          <div class="hatch" id="gap-box"></div>
+          <div class="annot">
+            <p class="red" id="gap-note">依据 CONFORMANCE.md 对账结果</p>
+            <p class="dim" id="gap-hint">斜线区 = 设计里写了、实现里没有</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="plate plate-ledger">
+        <div class="plate-head">
+          <span class="mono">活动记录</span>
+          <span class="mono dim" id="audit-count">-</span>
+        </div>
+        <ol class="ledger" id="audit"></ol>
       </section>
     </div>
-  </main>
 
-  <aside class="side">
-    <section class="side-block">
-      <div class="side-label">等待你确认</div>
-      <div id="pending"><p class="muted">暂无等待中的审批</p></div>
-    </section>
-    <section class="side-block">
-      <div class="side-label">本租户</div>
-      <dl class="kv" id="tenant-kv"></dl>
-    </section>
-  </aside>
+    <footer class="titleblock">
+      <div class="cell"><span class="k mono">图号</span><span class="v mono">CA-OV-01</span></div>
+      <div class="cell"><span class="k mono">版本</span><span class="v mono" id="tb-build">-</span></div>
+      <div class="cell"><span class="k mono">租户</span><span class="v mono" id="tb-tenant">-</span></div>
+      <div class="cell"><span class="k mono">日期</span><span class="v mono" id="tb-date">-</span></div>
+      <div class="cell"><span class="k mono">比例</span><span class="v mono">1:1</span></div>
+      <div class="cell"><span class="k mono">张数</span><span class="v mono">1 / 1</span></div>
+    </footer>
+  </div>
 </div>
 <script src="/overview.js"></script>
 </body>
