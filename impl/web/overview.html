@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cube-agent · 系统总览</title>
+<link rel="stylesheet" href="/overview.css" />
+</head>
+<body>
+<div class="app">
+  <nav class="rail">
+    <div class="brand">cube<span>·agent</span></div>
+    <div class="rail-group">
+      <div class="rail-label">工作区</div>
+      <a class="rail-item" id="to-workbench" href="/">工作台</a>
+      <a class="rail-item active" href="/overview">总览</a>
+    </div>
+    <div class="rail-foot">
+      <span id="build" class="mono">build -</span>
+      <span id="tenant" class="mono">-</span>
+    </div>
+  </nav>
+
+  <main class="main">
+    <header class="topbar">
+      <h1>系统总览</h1>
+      <div class="top-actions">
+        <span class="chip-state" id="driver"><i class="dot"></i><span>模型 -</span></span>
+        <button class="btn" id="refresh" type="button">刷新</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <section class="layers-wrap">
+        <div class="section-head">
+          <h2>分层</h2>
+          <span class="muted mono" id="layers-meta">-</span>
+        </div>
+        <div class="layers" id="layers"></div>
+      </section>
+
+      <section class="ledger">
+        <div class="section-head">
+          <h2>最近活动</h2>
+          <span class="muted mono" id="audit-count">-</span>
+        </div>
+        <ol class="rows" id="audit"></ol>
+      </section>
+    </div>
+  </main>
+
+  <aside class="side">
+    <section class="side-block">
+      <div class="side-label">等待你确认</div>
+      <div id="pending"><p class="muted">暂无等待中的审批</p></div>
+    </section>
+    <section class="side-block">
+      <div class="side-label">本租户</div>
+      <dl class="kv" id="tenant-kv"></dl>
+    </section>
+  </aside>
+</div>
+<script src="/overview.js"></script>
+</body>
+</html>

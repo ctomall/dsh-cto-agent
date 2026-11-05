@@ -98,3 +98,23 @@ test('新建会话归属于调用方租户，且跨租户不可见', async (t) =
   const other = await (await fetch(`${base}/api/sessions/s_00000000`, { headers: { authorization: 'Bearer tok_b' } })).json()
   assert.equal(other.error, 'not_found')
 })
+
+test('跨租户审批 → 404（知道 runId 也不能批）', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+
+  db.prepare('insert into runs (id, status, started_at, tenant_id, session_id) values (?,?,?,?,?)')
+    .run('r_cross', 'waiting_approval', new Date().toISOString(), 't_b', 's_b1')
+
+  const r = await fetch(`${base}/api/approvals/r_cross`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer tok_a' },
+    body: JSON.stringify({ decision: 'allow_once' }),
+  })
+  assert.equal(r.status, 404)
+})

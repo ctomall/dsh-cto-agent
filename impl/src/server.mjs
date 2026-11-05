@@ -256,9 +256,55 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { ok: true, driver: driver.name }))
     }
 
+    // —— 总览：只读聚合（租户内），给 /overview 页面用 ——
+    if (req.method === 'GET' && url.pathname === '/api/overview') {
+      const ctx = resolveContext(req.headers?.authorization)
+      if (ctx.error) return reply(res, ctx.error)
+      const t = ctx.tenantId
+      const one = (sql) => db.prepare(sql).get(t)?.c ?? 0
+      const byStatus = Object.fromEntries(
+        db.prepare('select status, count(*) c from runs where tenant_id = ? group by status').all(t).map((r) => [r.status, r.c]),
+      )
+      const pending = db
+        .prepare("select id, session_id, started_at from runs where tenant_id = ? and status = 'waiting_approval' order by started_at desc limit 5")
+        .all(t)
+        .map((r) => {
+          const ev = db
+            .prepare("select payload_json from events where run_id = ? and type = 'approval.requested' order by seq desc limit 1")
+            .get(r.id)
+          let tool = null
+          let target = null
+          try {
+            const pl = JSON.parse(ev?.payload_json ?? '{}')
+            tool = pl.action ?? null
+            target = pl.target ?? null
+          } catch {}
+          return { runId: r.id, sessionId: r.session_id, startedAt: r.started_at, tool, target }
+        })
+      const audit = db.prepare('select actor, action, ts from audit_log where tenant_id = ? order by id desc limit 8').all(t)
+      return reply(res, json(200, {
+        tenantId: t,
+        build: BOOT_SHA,
+        driver: { name: driver.name, real: !driver.name.startsWith('fake') },
+        counts: {
+          sessions: one('select count(*) c from sessions where tenant_id = ?'),
+          messages: one('select count(*) c from messages where tenant_id = ?'),
+          grants: one('select count(*) c from session_grants where tenant_id = ?'),
+          audit: one('select count(*) c from audit_log where tenant_id = ?'),
+          runs: byStatus,
+          runsTotal: Object.values(byStatus).reduce((a, b) => a + b, 0),
+        },
+        pending,
+        audit,
+      }))
+    }
+
     // —— 静态前端 ——
-    if (req.method === 'GET' && (url.pathname === '/' || /^\/(app\.(js|css)|favicon\.svg)$/.test(url.pathname))) {
-      const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1)
+    if (
+      req.method === 'GET' &&
+      (url.pathname === '/' || url.pathname === '/overview' || /^\/((app|overview)\.(js|css)|favicon\.svg)$/.test(url.pathname))
+    ) {
+      const file = url.pathname === '/' ? 'index.html' : url.pathname === '/overview' ? 'overview.html' : url.pathname.slice(1)
       try {
         const buf = await readFile(resolve(WEB_ROOT, file))
         res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' })
@@ -363,10 +409,20 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (ctx.error) return reply(res, ctx.error)
       const runId = decodeURIComponent(ap[1])
       if (!rc.status(runId)) return reply(res, json(404, { error: 'not_found' }))
+      // 租户归属校验：跨租户一律 404，不能"知道 runId 就能批"
+      const owner = db.prepare('select tenant_id from runs where id = ?').get(runId)
+      if (!owner || owner.tenant_id !== ctx.tenantId) return reply(res, json(404, { error: 'not_found' }))
       const body = await readJson(req)
       const decision = ['deny', 'allow_session'].includes(body.decision) ? body.decision : 'allow_once'
+      const pendingEv = db
+        .prepare("select payload_json from events where run_id = ? and type = 'approval.requested' order by seq desc limit 1")
+        .get(runId)
+      let tool = null
+      try { tool = JSON.parse(pendingEv?.payload_json ?? '{}').action ?? null } catch {}
       metrics.inc('approvals_total', { decision })
       const out = await loop.resume({ runId, decision })
+      db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
+        .run(ctx.tenantId, ctx.userId, 'approval_decided', JSON.stringify({ runId, decision, tool }), new Date().toISOString())
       return reply(res, json(200, { ...out, decision }))
     }
 
