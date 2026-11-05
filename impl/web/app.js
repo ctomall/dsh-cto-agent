@@ -227,12 +227,20 @@ $('#composer').addEventListener('submit', (e) => {
 })
 $('#input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#input').value) }
-  if (e.key === 'Escape') { state.es?.close(); setStatus('已停止', true) }
+  if (e.key === 'Escape') {
+    if (state.runId) api(`/api/runs/${state.runId}/cancel`, { method: 'POST', body: '{}' })
+    state.es?.close()
+    setStatus('已停止', true)
+  }
 })
 for (const chip of document.querySelectorAll('.chip')) {
   chip.addEventListener('click', () => { $('#input').value = chip.dataset.fill })
 }
-$('#stop').addEventListener('click', () => { state.es?.close(); setStatus('已停止', true) })
+$('#stop').addEventListener('click', async () => {
+  if (state.runId) await api(`/api/runs/${state.runId}/cancel`, { method: 'POST', body: '{}' })
+  state.es?.close()
+  setStatus('已停止', true)
+})
 
 $('#revoke').addEventListener('click', async () => {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })

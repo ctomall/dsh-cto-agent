@@ -345,6 +345,17 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { revoked }))
     }
 
+    // —— 取消 run（文档 §2.2 可取消）——
+    const cn = /^\/api\/runs\/([^/]+)\/cancel$/.exec(url.pathname)
+    if (req.method === 'POST' && cn) {
+      const ctx = resolveContext(req.headers?.authorization)
+      if (ctx.error) return reply(res, ctx.error)
+      const runId = decodeURIComponent(cn[1])
+      const run = db.prepare('select tenant_id from runs where id = ?').get(runId)
+      if (!run || run.tenant_id !== ctx.tenantId) return reply(res, json(404, { error: 'not_found' }))
+      return reply(res, json(200, loop.cancel(runId)))
+    }
+
     // —— 审批回写 ——
     const ap = /^\/api\/approvals\/([^/]+)$/.exec(url.pathname)
     if (req.method === 'POST' && ap) {

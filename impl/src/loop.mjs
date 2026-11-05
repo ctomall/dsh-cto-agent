@@ -1,4 +1,5 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
+import { TERMINAL } from './runs.mjs'
 export class AgentLoop {
   constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000 }) {
     this.rc = rc
@@ -13,6 +14,7 @@ export class AgentLoop {
     this.timeoutMs = timeoutMs
     this.maxSteps = maxSteps
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
+    this.aborts = new Map() // runId -> { ctrl, reason }  （用户取消 / 超时共用）
   }
 
   async start({ runId, tenantId = null, sessionId = null, input }) {
@@ -38,14 +40,16 @@ export class AgentLoop {
       streamed = true
       this.rc.emitTo(runId, 'text.delta', { text: t })
     }
-    // run 级超时：provider 卡住时不能让 run 永远挂在 running
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), this.timeoutMs)
+    // run 级超时 + 用户取消：共用一个 AbortController，靠 reason 区分
+    const entry = this.aborts.get(runId) ?? { ctrl: new AbortController(), reason: null }
+    this.aborts.set(runId, entry)
+    const timer = setTimeout(() => { entry.reason = 'timeout'; entry.ctrl.abort() }, this.timeoutMs)
     let decision
     try {
-      decision = await this.driver.complete({ messages, tools: this.tools.schema, onDelta, signal: ctrl.signal })
+      decision = await this.driver.complete({ messages, tools: this.tools.schema, onDelta, signal: entry.ctrl.signal })
     } catch (e) {
-      const timedOut = ctrl.signal.aborted
+      if (entry.reason === 'user') return { status: 'canceled' } // cancel() 已发过事件
+      const timedOut = entry.reason === 'timeout' || entry.ctrl.signal.aborted
       this.rc.transition(runId, 'failed')
       this.rc.emitTo(runId, 'run.failed', {
         runId,
@@ -117,6 +121,21 @@ export class AgentLoop {
       messages.push({ role: 'tool', tool_call_id: callId, content: `error: ${e.message}` })
     }
     return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
+  }
+
+  // 用户取消：中止在途请求（信号一路传到 fetch），状态切 canceled 并发事件
+  cancel(runId) {
+    const status = this.rc.status(runId)
+    if (!status) return { status: null, note: 'unknown_run' }
+    if (TERMINAL.has(status)) return { status, note: 'already_terminal' }
+    const entry = this.aborts.get(runId)
+    if (entry) {
+      entry.reason = 'user'
+      entry.ctrl.abort()
+    }
+    this.rc.transition(runId, 'canceled')
+    this.rc.emitTo(runId, 'run.canceled', { runId })
+    return { status: 'canceled' }
   }
 
   async resume({ runId, decision }) {
