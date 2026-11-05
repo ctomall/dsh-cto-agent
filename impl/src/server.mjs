@@ -142,6 +142,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     driver,
     grants,
     workspaceRoot: WORKSPACE_ROOT,
+    loadHistory: ({ tenantId, sessionId, limit }) =>
+      db
+        .prepare('select role, content from messages where tenant_id = ? and session_id = ? order by rowid desc limit ?')
+        .all(tenantId, sessionId, Number(limit))
+        .reverse()
+        .map((r) => ({ role: r.role, content: r.content })),
     store: ({ tenantId, sessionId, runId, role, content }) =>
       db
         .prepare('insert into messages (id, tenant_id, session_id, role, content, created_at) values (?, ?, ?, ?, ?, ?)')
@@ -301,7 +307,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
       if (!owned) return reply(res, json(404, { error: 'not_found' }))
       const rows = db
-        .prepare('select role, content, created_at from messages where tenant_id = ? and session_id = ? order by created_at asc, id asc')
+        .prepare('select role, content, created_at from messages where tenant_id = ? and session_id = ? order by rowid asc')
         .all(ctx.tenantId, sessionId)
       return reply(res, json(200, { messages: rows }))
     }
