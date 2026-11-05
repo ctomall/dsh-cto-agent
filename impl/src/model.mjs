@@ -24,10 +24,10 @@ export function createFakeDriver() {
 }
 
 // OpenAI 兼容端点（DeepSeek / OpenAI / 兼容网关均可）
-export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000 }) {
+export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000, stream = true }) {
   return {
     name: `openai:${model}`,
-    async complete({ messages, tools }) {
+    async complete({ messages, tools, onDelta }) {
       const body = {
         model,
         messages: messages.map((m) =>
@@ -37,6 +37,7 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000 
         ),
         tools: tools.map((t) => ({ type: 'function', function: t })),
         tool_choice: 'auto',
+        ...(stream && onDelta ? { stream: true } : {}),
       }
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -48,6 +49,50 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000 
           signal: ctrl.signal,
         })
         if (!res.ok) throw new Error(`provider ${res.status}: ${(await res.text()).slice(0, 200)}`)
+
+        // 流式：逐块推 text.delta（事件序列由模型输出驱动），并累积 tool_calls 分片
+        if (stream && onDelta && String(res.headers.get('content-type') || '').includes('text/event-stream')) {
+          const reader = res.body.getReader()
+          const decoder = new TextDecoder()
+          let buf = ''
+          let text = ''
+          const calls = []
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            const lines = buf.split('\n')
+            buf = lines.pop() ?? ''
+            for (const line of lines) {
+              const t = line.trim()
+              if (!t.startsWith('data:')) continue
+              const payload = t.slice(5).trim()
+              if (payload === '[DONE]') continue
+              let chunk
+              try { chunk = JSON.parse(payload) } catch { continue }
+              const delta = chunk.choices?.[0]?.delta ?? {}
+              if (delta.content) {
+                text += delta.content
+                onDelta(delta.content)
+              }
+              for (const tc of delta.tool_calls ?? []) {
+                const i = tc.index ?? 0
+                calls[i] ??= { id: tc.id ?? `call_${i}`, name: '', arguments: '' }
+                if (tc.id) calls[i].id = tc.id
+                if (tc.function?.name) calls[i].name += tc.function.name
+                if (tc.function?.arguments) calls[i].arguments += tc.function.arguments
+              }
+            }
+          }
+          const first = calls.find(Boolean)
+          if (first?.name) {
+            let args = {}
+            try { args = JSON.parse(first.arguments || '{}') } catch { args = {} }
+            return { type: 'tool_call', call: { id: first.id, name: first.name, args } }
+          }
+          return { type: 'final', text }
+        }
+
         const j = await res.json()
         const msg = j.choices?.[0]?.message ?? {}
         if (msg.tool_calls?.length) {

@@ -32,11 +32,17 @@ export class AgentLoop {
       return { status: 'failed' }
     }
 
-    const decision = await this.driver.complete({ messages, tools: this.tools.schema })
+    let streamed = false
+    const onDelta = (t) => {
+      streamed = true
+      this.rc.emitTo(runId, 'text.delta', { text: t })
+    }
+    const decision = await this.driver.complete({ messages, tools: this.tools.schema, onDelta })
 
     if (decision.type === 'final') {
       if (decision.text) {
-        this.rc.emitTo(runId, 'text.delta', { text: decision.text })
+        // 流式时增量已逐块发过，这里不再整段重复
+        if (!streamed) this.rc.emitTo(runId, 'text.delta', { text: decision.text })
         // 落库，刷新页面后历史仍在（用户故事 4：关页重开历史完整）
         this.store?.({ tenantId, sessionId, runId, role: 'assistant', content: decision.text })
       }
