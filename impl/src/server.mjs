@@ -302,7 +302,10 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 静态前端 ——
     if (
       req.method === 'GET' &&
-      (url.pathname === '/' || url.pathname === '/overview' || /^\/((app|overview)\.(js|css)|favicon\.svg)$/.test(url.pathname))
+      (url.pathname === '/' ||
+        url.pathname === '/overview' ||
+        /^\/((app|overview)\.(js|css)|favicon\.svg)$/.test(url.pathname) ||
+        /^\/fonts\/(montserrat-(light|regular|medium)\.woff2|Montserrat-OFL\.txt)$/.test(url.pathname))
     ) {
       const file = url.pathname === '/' ? 'index.html' : url.pathname === '/overview' ? 'overview.html' : url.pathname.slice(1)
       try {

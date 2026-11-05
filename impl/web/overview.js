@@ -1,5 +1,5 @@
-// 系统断面：把 L0–L5 画成一张技术图纸。
-// 数据来自 /api/overview（租户内只读聚合）；缺口数据来自 CONFORMANCE.md 的对账结果（硬编码但可追溯）。
+// 总览页：语言参照 DSH Web（冷中性阶 + 发丝线 + 层叠卡片）。
+// 数据来自 /api/overview；缺口数据来自 CONFORMANCE.md 对账结果。
 const qs = new URLSearchParams(location.search)
 const token = qs.get('token') || ''
 
@@ -20,7 +20,6 @@ const ACTION_CN = {
   session_grant: '命中会话授权',
 }
 
-// 文档有、代码无（对账自 CONFORMANCE.md，v33 版）
 const GAPS = [
   ['数据表', '6 张'],
   ['事件类型', '3 类'],
@@ -28,72 +27,98 @@ const GAPS = [
   ['Skill · 知识库 · 插件', '未实现'],
 ]
 
-const timeOf = (iso) => String(iso || '').slice(11, 19) || '-'
+const timeOf = (iso) => String(iso || '').slice(11, 19) || '—'
 
-function layers(d) {
+function layerRows(d) {
   const r = d.counts.runs || {}
   const waiting = r.waiting_approval || 0
   const running = r.running || 0
   return [
-    { code: 'L0', name: 'Host Shell', cn: '页面与资源', desc: '工作台 · 断面页 · 静态资源', val: '2 页', state: 'ok' },
-    { code: 'L1', name: 'Gateway', cn: '网关', desc: '鉴权 · 限流 · 路由 · 租户隔离', val: '14 路由', state: 'ok' },
+    { code: 'L0', name: 'Host Shell', cn: '页面与资源', desc: '工作台 · 总览 · 静态资源', num: '2', unit: '页', tag: 'ok', tagText: '在线' },
+    { code: 'L1', name: 'Gateway', cn: '网关', desc: '鉴权 · 限流 · 路由 · 租户隔离', num: '14', unit: '路由', tag: 'ok', tagText: '正常' },
     {
       code: 'L2', name: 'Kernel', cn: '内核', desc: '事件总线 · 模型驱动 · 工具策略',
-      val: d.driver.real ? d.driver.name : '桩',
-      state: d.driver.real ? 'ok' : 'gap',
+      num: d.driver.real ? '1' : '0', unit: d.driver.real ? '模型' : '真实模型',
+      tag: d.driver.real ? 'ok' : 'gap', tagText: d.driver.real ? '已接入' : '桩',
     },
     {
       code: 'L3', name: 'Runs', cn: '运行', desc: '状态机 · 审批挂起 · 取消',
-      val: `${waiting + running} 进行中`,
-      state: waiting ? 'warn' : 'ok',
+      num: String(waiting + running), unit: '进行中',
+      tag: waiting ? 'wait' : 'ok', tagText: waiting ? `${waiting} 待审批` : '空闲',
     },
-    { code: 'L4', name: 'Tools', cn: '工具与授权', desc: 'fs.read · fs.write · 会话授权', val: `${d.counts.grants} 授权`, state: 'ok' },
-    { code: 'L5', name: 'Storage', cn: '存储', desc: '会话 · 消息 · 审计 · 事件', val: `${d.counts.messages} 消息`, state: 'ok' },
+    { code: 'L4', name: 'Tools', cn: '工具与授权', desc: 'fs.read · fs.write · 会话授权', num: String(d.counts.grants), unit: '授权', tag: 'ok', tagText: '正常' },
+    { code: 'L5', name: 'Storage', cn: '存储', desc: '会话 · 消息 · 审计 · 事件', num: String(d.counts.messages), unit: '消息', tag: 'ok', tagText: '正常' },
   ]
 }
 
-function renderStack(d) {
+function renderLayers(d) {
   const box = $('#layers')
   box.textContent = ''
-  for (const L of layers(d)) {
-    const row = el('div', 'layer')
-    row.dataset.state = L.state
-    const code = el('div', 'code', L.code)
+  for (const L of layerRows(d)) {
+    const row = el('div', 'row')
+    row.append(el('div', 'code', L.code))
+
     const body = el('div')
-    const nm = el('div', 'nm', L.name)
-    nm.append(el('span', 'cn', L.cn))
-    body.append(nm, el('div', 'desc', L.desc))
-    const dimLine = el('div', 'dim-line')
-    dimLine.append(el('div', 'bar'), el('span', 'val', L.val))
-    row.append(code, body, dimLine)
+    const name = el('div', 'name', L.name)
+    name.append(el('span', 'cn', L.cn))
+    body.append(name, el('div', 'desc', L.desc))
+
+    const metric = el('div', 'metric')
+    metric.append(document.createTextNode(L.num), el('span', 'unit', ` ${L.unit}`))
+
+    const tag = el('span', `tag ${L.tag}`)
+    tag.append(el('i', 'dot'), el('span', null, L.tagText))
+
+    row.append(body, metric, tag)
     box.append(row)
   }
-  $('#stack-meta').textContent = `L0–L5 · ${d.build}`
-  const stamp = $('#stamp')
-  stamp.hidden = d.driver.real
+  $('#layers-meta').textContent = `L0–L5 · ${d.build}`
+  const pill = $('#driver')
+  pill.className = `pill ${d.driver.real ? 'is-ok' : 'is-warn'}`
+  pill.querySelector('span').textContent = d.driver.real ? d.driver.name : '模型未接入'
 }
 
 function renderGaps() {
-  const box = $('#gap-box')
-  const ul = el('ul')
-  for (const [k, v] of GAPS) {
-    const li = el('li')
-    li.append(el('span', null, k), el('span', 'dim', v))
-    ul.append(li)
+  const box = $('#gaps')
+  box.className = 'rows rows-gap'
+  box.textContent = ''
+  for (const [label, count] of GAPS) {
+    const row = el('div', 'row')
+    row.append(el('i', 'dot'), el('span', 'label', label), el('span', 'count', count))
+    box.append(row)
   }
-  box.append(ul)
   $('#gaps-meta').textContent = `${GAPS.length} 处`
+}
+
+function renderAudit(d) {
+  const box = $('#audit')
+  box.className = 'rows rows-audit'
+  box.textContent = ''
+  if (!d.audit.length) {
+    box.append(el('div', 'empty', '还没有活动记录'))
+  } else {
+    d.audit.forEach((a, i) => {
+      const row = el('div', 'row')
+      row.append(
+        el('span', 'no', String(i + 1).padStart(2, '0')),
+        el('time', null, timeOf(a.ts)),
+        el('span', 'act', ACTION_CN[a.action] || a.action),
+      )
+      box.append(row)
+    })
+  }
+  $('#audit-count').textContent = `${d.counts.audit} 条`
 }
 
 function renderPending(d) {
   const box = $('#pending')
   box.textContent = ''
-  if (!d.pending.length) {
-    box.append(el('p', 'dim mono', '无'))
-  }
+  if (!d.pending.length) box.append(el('div', 'empty', '暂无等待中的审批'))
   for (const p of d.pending) {
-    const item = el('div', 'item')
-    item.append(el('div', 'tool', TOOL_CN[p.tool] || p.tool || '待确认动作'))
+    const item = el('div', 'pend')
+    const top = el('div', 'top')
+    top.append(el('i', 'dot'), el('span', 'tool', TOOL_CN[p.tool] || p.tool || '待确认动作'))
+    item.append(top)
     if (p.target) item.append(el('div', 'target', p.target))
     const meta = el('div', 'meta')
     meta.append(el('span', null, p.runId), el('span', null, timeOf(p.startedAt)))
@@ -103,54 +128,47 @@ function renderPending(d) {
   $('#pending-count').textContent = `${d.pending.length} 条`
 }
 
-function renderLedger(d) {
-  const ol = $('#audit')
-  ol.textContent = ''
-  if (!d.audit.length) {
-    ol.classList.add('is-empty')
-    const li = el('li')
-    li.append(el('span', 'dim', '还没有活动'))
-    ol.append(li)
-  } else {
-    ol.classList.remove('is-empty')
-    d.audit.forEach((a, i) => {
-      const li = el('li')
-      li.append(
-        el('span', 'no', String(i + 1).padStart(2, '0')),
-        el('span', 't', timeOf(a.ts)),
-        el('span', null, ACTION_CN[a.action] || a.action),
-      )
-      ol.append(li)
-    })
-  }
-  $('#audit-count').textContent = `${d.counts.audit} 条`
-}
-
-function renderTitleBlock(d) {
+function renderMeta(d) {
   const now = new Date()
-  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  $('#sheet-sub').textContent = `cube-agent · 分层断面 A–A · 运行 ${d.counts.runsTotal} 次 · 刷新 ${now.toTimeString().slice(0, 8)}`
-  $('#tb-build').textContent = d.build
-  $('#tb-tenant').textContent = d.tenantId
-  $('#tb-date').textContent = date
+  $('#sub').textContent = `运行 ${d.counts.runsTotal} 次 · 刷新 ${now.toTimeString().slice(0, 8)}`
+  $('#build').textContent = `build ${d.build}`
+  $('#tenant').textContent = `tenant ${d.tenantId}`
+
+  const kv = $('#tenant-kv')
+  kv.textContent = ''
+  for (const [k, v] of [
+    ['会话', d.counts.sessions],
+    ['消息', d.counts.messages],
+    ['运行', d.counts.runsTotal],
+    ['会话授权', d.counts.grants],
+    ['审计', d.counts.audit],
+  ]) {
+    kv.append(el('dt', null, k), el('dd', null, String(v)))
+  }
+
+  for (const a of document.querySelectorAll('a[href^="/"]')) {
+    const href = a.getAttribute('href')
+    if (href.includes('token=')) continue
+    a.href = `${href}${href.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+  }
 }
 
 async function load() {
   if (!token) {
-    $('#layers').append(el('p', 'dim mono', '缺少访问令牌：地址后加 ?token=…'))
+    $('#layers').append(el('div', 'empty', '缺少访问令牌：地址后加 ?token=…'))
     return
   }
   const res = await fetch('/api/overview', { headers: { authorization: `Bearer ${token}` } })
   if (!res.ok) {
-    $('#layers').append(el('p', 'dim mono', `读取失败（${res.status}）`))
+    $('#layers').append(el('div', 'empty', `读取失败（${res.status}）`))
     return
   }
   const d = await res.json()
-  renderStack(d)
+  renderLayers(d)
   renderGaps()
+  renderAudit(d)
   renderPending(d)
-  renderLedger(d)
-  renderTitleBlock(d)
+  renderMeta(d)
 }
 
 $('#refresh').addEventListener('click', load)

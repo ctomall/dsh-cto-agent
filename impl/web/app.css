@@ -1,24 +1,30 @@
+@font-face {
+  font-family: "Montserrat";
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/montserrat-medium.woff2") format("woff2");
+}
 :root {
-  /* 石墨中性色梯度，暖度极低；颜色只在“需要你决定”的时刻出现 */
-  --bg: #F7F7F8;
+  /* 参照 DSH Web：neutral-bluish 冷中性阶 + 发丝线 + DSH 圆角 */
+  --bg: #F5F7FA;
   --surface: #FFFFFF;
-  --surface-2: #F1F1F3;
-  --border: #E6E6EA;
-  --border-strong: #D5D5DB;
-  --text: #16171A;
-  --text-2: #57575F;
-  --text-3: #8B8B94;
-  --accent: #2F6BFF;
-  --accent-weak: #EAF0FF;
-  --success: #12805C;
-  --warning: #A9610A;
-  --danger: #B8341F;
+  --surface-2: #F1F3F5;
+  --border: rgba(0, 0, 0, .10);
+  --border-strong: rgba(0, 0, 0, .16);
+  --text: #0F1115;
+  --text-2: #61666B;
+  --text-3: #979DA6;
+  --accent: #3B82F6;
+  --accent-weak: #EFF4FF;
+  --success: #15803D;
+  --warning: #A16207;
+  --danger: #B91C1C;
 
-  --r-sm: 6px;
+  --r-sm: 4px;
   --r-md: 8px;
-  --r-lg: 12px;
+  --r-lg: 16px;
   --dur: 120ms;
-  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease: cubic-bezier(.2, 0, 0, 1);
 }
 
 * { box-sizing: border-box; }
@@ -42,7 +48,7 @@ body {
   flex-direction: column;
   min-width: 0;
 }
-.brand { padding: 20px 16px 4px; font-size: 15px; font-weight: 600; letter-spacing: .1px; }
+.brand { padding: 20px 16px 4px; font-family: "Montserrat", system-ui, sans-serif; font-size: 15px; font-weight: 500; letter-spacing: .2px; }
 .brand span { color: var(--text-3); font-weight: 400; }
 .nav-group { flex: 1; overflow: auto; padding: 24px 8px 8px; }
 .nav-label { font-size: 12px; color: var(--text-3); padding: 0 8px 8px; }
