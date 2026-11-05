@@ -78,3 +78,10 @@ test('身份门关闭：API 仍需 token，未带 token 一律 401', async (t) =
   }
   assert.deepEqual(failures, [])
 })
+
+test('前端脚本必须能通过语法检查（防止再出现"页面空壳"）', async (t) => {
+  const vm = await import('node:vm')
+  const { readFile } = await import('node:fs/promises')
+  const src = await readFile(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.doesNotThrow(() => new vm.Script(src, { filename: 'web/app.js' }), 'web/app.js 有语法错误，页面会整页失效')
+})

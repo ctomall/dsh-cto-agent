@@ -191,12 +191,24 @@ async function send(text) {
   subscribe(body.runId)
 }
 
-async function $('#revoke').addEventListener('click', async () => {
+$('#revoke').addEventListener('click', async () => {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
   $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条本会话授权` : `撤销失败（${status}）`
 })
 
-boot() {
+async function loadHistory() {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/messages`)
+  if (status !== 200 || !body.messages?.length) return
+  for (const m of body.messages) {
+    if (m.role === 'user') appendUser(m.content)
+    else {
+      const b = assistantBubble()
+      b.textContent = m.content
+    }
+  }
+}
+
+async function boot() {
   if (!token) {
     $('#who').textContent = 'no token'
     return
