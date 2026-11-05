@@ -142,6 +142,10 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     driver,
     grants,
     workspaceRoot: WORKSPACE_ROOT,
+    store: ({ tenantId, sessionId, runId, role, content }) =>
+      db
+        .prepare('insert into messages (id, tenant_id, session_id, role, content, created_at) values (?, ?, ?, ?, ?, ?)')
+        .run(`${runId}-${role}-${Math.random().toString(16).slice(2, 8)}`, tenantId, sessionId, role, content, new Date().toISOString()),
     audit: ({ tenantId, sessionId, tool, decision }) =>
       db
         .prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
@@ -286,6 +290,20 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       metrics.inc('runs_created_total', { driver: driver.name.startsWith('fake') ? 'fake' : 'real' })
       await loop.start({ runId, tenantId: ctx.tenantId, sessionId, input: String(body.input ?? '') })
       return reply(res, json(202, { runId, sessionId, driver: driver.name }))
+    }
+
+    // —— 会话历史（刷新页面后恢复）——
+    const hist = /^\/api\/sessions\/([^/]+)\/messages$/.exec(url.pathname)
+    if (req.method === 'GET' && hist) {
+      const ctx = resolveContext(req.headers?.authorization)
+      if (ctx.error) return reply(res, ctx.error)
+      const sessionId = decodeURIComponent(hist[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      const rows = db
+        .prepare('select role, content, created_at from messages where tenant_id = ? and session_id = ? order by created_at asc, id asc')
+        .all(ctx.tenantId, sessionId)
+      return reply(res, json(200, { messages: rows }))
     }
 
     // —— 新建会话（验收与前端都需要；租户由 ctx 决定，不接受外部指定）——

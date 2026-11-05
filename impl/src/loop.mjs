@@ -1,12 +1,13 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, maxSteps = 10 }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, maxSteps = 10 }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
     this.workspaceRoot = workspaceRoot
     this.grants = grants
     this.audit = audit
+    this.store = store
     this.maxSteps = maxSteps
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
   }
@@ -15,6 +16,7 @@ export class AgentLoop {
     this.rc.create(runId, { tenantId, sessionId })
     this.rc.transition(runId, 'running')
     this.rc.emitTo(runId, 'text.delta', { text: `收到目标：${input}` })
+    this.store?.({ tenantId, sessionId, runId, role: 'user', content: input })
     const messages = [{ role: 'user', content: input }]
     return this.step({ runId, messages, steps: 0, tenantId, sessionId })
   }
@@ -29,7 +31,11 @@ export class AgentLoop {
     const decision = await this.driver.complete({ messages, tools: this.tools.schema })
 
     if (decision.type === 'final') {
-      if (decision.text) this.rc.emitTo(runId, 'text.delta', { text: decision.text })
+      if (decision.text) {
+        this.rc.emitTo(runId, 'text.delta', { text: decision.text })
+        // 落库，刷新页面后历史仍在（用户故事 4：关页重开历史完整）
+        this.store?.({ tenantId, sessionId, runId, role: 'assistant', content: decision.text })
+      }
       this.rc.transition(runId, 'done')
       this.rc.emitTo(runId, 'run.finished', { runId, ok: true })
       return { status: 'done' }

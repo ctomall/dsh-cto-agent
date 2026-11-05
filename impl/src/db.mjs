@@ -23,6 +23,17 @@ export function openDb(path = ':memory:') {
       detail_json text not null,
       ts text not null
     );
+    create table if not exists messages (
+      id text primary key,
+      tenant_id text not null,
+      session_id text not null,
+      role text not null,
+      content text not null,
+      created_at text not null,
+      parent_id text
+    );
+    create index if not exists idx_messages_session on messages (tenant_id, session_id);
+
     create table if not exists runs (
       id text primary key,
       status text not null,

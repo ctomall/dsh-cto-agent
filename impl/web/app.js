@@ -214,6 +214,8 @@ boot() {
     ul.append(li)
   }
 
+  await loadHistory()
+
   if (demo) {
     await send('把这三个 PDF 汇总成一份带目录的 docx')
   }
