@@ -104,7 +104,18 @@ function artifactCard(p) {
   meta.append(el('div', 'nm', p.path), el('div', 'sz', `${p.mime || 'file'} · ${p.size || 0} B`))
   card.append(meta)
   const acts = el('div', 'acts')
-  acts.append(el('button', 'btn', '预览'), el('button', 'btn primary', '下载'))
+  const href = `/api/artifacts/${encodeURIComponent(state.runId)}/${p.path
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}?token=${encodeURIComponent(token)}`
+  const preview = el('a', 'btn', '预览')
+  preview.href = href
+  preview.target = '_blank'
+  preview.rel = 'noopener'
+  const dl = el('a', 'btn primary', '下载')
+  dl.href = href
+  dl.setAttribute('download', '')
+  acts.append(preview, dl)
   card.append(acts)
   streamBox().append(card)
   $('#artifacts').querySelector('.muted')?.remove()

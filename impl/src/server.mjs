@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { dirname, resolve, extname } from 'node:path'
+import { dirname, resolve, extname, sep } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolveContext, auditDenial, TOKEN_SOURCE } from './context.mjs'
@@ -108,7 +108,17 @@ export function handleRequest(db, req) {
   return json(404, { error: 'not_found' })
 }
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' }
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.md': 'text/markdown; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+}
 
 export function createApp(db, { log = new EventLog(db), rc = new RunController(db, log) } = {}) {
   let seq = 0
@@ -182,6 +192,36 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       }
       res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
       return res.end(LOGIN_HTML.replace('<!--ERR-->', '<p class="err">口令不正确</p>'))
+    }
+
+    // —— 产物下载/预览：租户校验 + 工作区路径约束（浏览器 <a> 带不了 header，故允许 ?token=）——
+    const art = /^\/api\/artifacts\/([^/]+)\/(.+)$/.exec(url.pathname)
+    if (req.method === 'GET' && art) {
+      const bearer = req.headers.authorization ?? `Bearer ${url.searchParams.get('token') ?? ''}`
+      const ctx = resolveContext(bearer)
+      if (ctx.error) return reply(res, ctx.error)
+
+      const runId = decodeURIComponent(art[1])
+      const rel = decodeURIComponent(art[2])
+      const run = db.prepare('select tenant_id from runs where id = ?').get(runId)
+      if (!run || run.tenant_id !== ctx.tenantId) return reply(res, json(404, { error: 'not_found' }))
+
+      const root = resolve(WORKSPACE_ROOT, runId)
+      const abs = resolve(root, rel)
+      if (abs !== root && !abs.startsWith(root + sep)) return reply(res, json(400, { error: 'path_outside_workspace' }))
+      try {
+        const buf = await readFile(abs)
+        const type = MIME[extname(abs)] ?? 'application/octet-stream'
+        res.writeHead(200, {
+          'content-type': type,
+          'content-length': String(buf.length),
+          'content-disposition': `attachment; filename="${abs.split('/').pop()}"`,
+          'cache-control': 'no-store',
+        })
+        return res.end(buf)
+      } catch {
+        return reply(res, json(404, { error: 'not_found' }))
+      }
     }
 
     // —— 指标（与页面同门禁，避免公网裸看流量）——
