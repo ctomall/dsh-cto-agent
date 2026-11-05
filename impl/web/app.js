@@ -1,7 +1,10 @@
-// 最小前端：会话流 + 工具卡 + 审批卡 + 产物卡。无构建步骤，直接 ES 模块。
+// 最小前端：会话流 + 工具卡 + 审批卡 + 产物卡。
+// 设计约束（对应方向）：石墨中性色 + 单一强调色；颜色只出现在“需要你决定”的时刻；
+// 每块内容前有窄等宽序号（01、02…），像值班日志的行号。
 const qs = new URLSearchParams(location.search)
 const token = qs.get('token') || ''
 const demo = qs.get('demo') === '1'
+const sessionId = qs.get('sid') || 's_a1'
 
 const $ = (sel) => document.querySelector(sel)
 const el = (tag, cls, text) => {
@@ -11,8 +14,18 @@ const el = (tag, cls, text) => {
   return n
 }
 
-const sessionId = qs.get('sid') || 's_a1'
-const state = { runId: null, es: null, assistant: null, seq: 0, sessionId }
+const TOOL_LABEL = {
+  'fs.write': '写文件',
+  'fs.read': '读文件',
+  'shell.exec': '执行命令',
+  'browser.open': '打开网页',
+  'kb.write': '写知识库',
+  'kb.search': '查知识库',
+}
+const label = (name) => TOOL_LABEL[name] || name
+const pretty = (v) => { try { return JSON.stringify(v, null, 2) } catch { return String(v) } }
+
+const state = { runId: null, es: null, idx: 0, assistant: null, toolCards: new Map(), toolArgs: new Map(), decided: false, sessionId }
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -32,138 +45,190 @@ function streamBox() {
   return inner
 }
 
-function appendUser(text) {
-  const box = streamBox()
-  const wrap = el('div', 'msg user')
-  wrap.append(el('div', 'bubble', text))
-  box.append(wrap)
+function nextIdx() {
+  state.idx += 1
+  return String(state.idx).padStart(2, '0')
 }
 
-function assistantBubble() {
-  const box = streamBox()
-  const wrap = el('div', 'msg assistant')
-  const cap = el('div', 'caption', 'Agent')
-  const b = el('div', 'bubble')
-  wrap.append(cap, b)
-  box.append(wrap)
-  state.assistant = b
-  return b
+// 每个内容块 = 序号 + 内容，读起来像一行日志
+function addTurn(kind, node) {
+  const wrap = el('div', `turn ${kind}`)
+  wrap.append(el('span', 'idx mono', nextIdx()), node)
+  streamBox().append(wrap)
+  return wrap
 }
+
+function addUser(text) {
+  const bubble = el('div', 'bubble', text)
+  addTurn('turn-user', bubble)
+}
+
+function ensureAssistant() {
+  if (state.assistant) return state.assistant
+  const text = el('div', 'text')
+  addTurn('turn-assistant', text)
+  state.assistant = text
+  return text
+}
+
+const FILE_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M19 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9l5 5v12a1 1 0 0 1-1 1Z"/></svg>'
 
 function toolCard({ tool, callId }) {
   const card = el('div', 'card tool')
   const head = el('div', 'card-head')
-  head.append(el('span', 'name', tool), el('span', 'meta', callId), el('span', 'status running', '运行中'))
+  const caret = el('span', 'caret', '▸')
+  const dot = el('span', 'dot')
+  const name = el('span', 'name', label(tool))
+  const status = el('span', 'status status-running', '运行中')
+  status.prepend(dot)
+  head.append(caret, name, status)
   const body = el('div', 'card-body')
-  const l1 = el('p', 'label', '请求参数')
-  const pre = el('pre', null, JSON.stringify({ cmd: 'ls -la', cwd: '.' }, null, 2))
-  body.append(l1, pre)
+  body.append(el('p', 'label', '参数'))
+  const pre = el('pre', null, '—')
+  body.append(pre)
   card.append(head, body)
   head.addEventListener('click', () => card.classList.toggle('open'))
-  streamBox().append(card)
+  state.toolCards.set(callId, { card, status })
+  addTurn('turn-tool', card)
   return card
+}
+
+function setToolState(callId, kind, text) {
+  const entry = state.toolCards.get(callId)
+  if (!entry) return
+  const { status } = entry
+  status.className = `status status-${kind}`
+  status.textContent = ''
+
+  const dot = el('span', 'dot')
+  if (kind === 'ok') dot.style.background = 'var(--success)'
+  if (kind === 'error') dot.style.background = 'var(--danger)'
+  if (kind === 'muted') dot.style.background = 'var(--text-3)'
+  status.append(dot, el('span', null, text))
+
+  const args = state.toolArgs.get(callId)
+  const pre = entry.card.querySelector('pre')
+  if (pre && args) pre.textContent = pretty(args)
 }
 
 function approvalCard(p) {
   const card = el('div', 'card approval')
   const head = el('div', 'card-head')
-  head.append(el('span', 'title', `需要你确认：${p.action}`))
+  head.append(el('span', 'title', `需要你确认 · ${label(p.action)}`))
   const body = el('div', 'body')
+
   const dl = el('dl')
-  const rows = [['目标', p.target], ['影响', p.impact], ['参数', JSON.stringify(p.args)]]
-  for (const [k, v] of rows) {
+  for (const [k, v] of [['目标', p.target], ['影响', p.impact]]) {
     dl.append(el('dt', null, k), el('dd', null, v))
   }
   body.append(dl)
+
+  // 参数默认折叠（产品文档 §9.3）
+  const det = document.createElement('details')
+  det.append(el('summary', null, '参数'))
+  const pre = el('pre', null, pretty(p.args))
+  det.append(pre)
+  body.append(det)
+
   const actions = el('div', 'actions')
-  const btnDeny = el('button', 'btn danger', '拒绝')
-  const btnSession = el('button', 'btn', '本会话允许')
-  const btnOnce = el('button', 'btn primary', '允许一次')
-  actions.append(btnDeny, btnSession, btnOnce)
-  card.append(head, body, actions)
+  const deny = el('button', 'btn danger', '拒绝')
+  const once = el('button', 'btn primary', '允许一次')
+  const sess = el('button', 'btn', '本会话允许')
+  actions.append(deny, sess, once)
 
   const decide = async (decision) => {
     if (state.decided) return
     state.decided = true
-    for (const b of [btnDeny, btnSession, btnOnce]) b.disabled = true
-    card.dataset.decision = decision
+    for (const b of [deny, once, sess]) b.disabled = true
     await api(`/api/approvals/${state.runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
   }
-  btnDeny.addEventListener('click', () => decide('deny'))
-  btnSession.addEventListener('click', () => decide('allow_session'))
-  btnOnce.addEventListener('click', () => decide('allow_once'))
+  deny.addEventListener('click', () => decide('deny'))
+  once.addEventListener('click', () => decide('allow_once'))
+  sess.addEventListener('click', () => decide('allow_session'))
 
-  streamBox().append(card)
+  card.append(head, body, actions)
+  addTurn('turn-approval', card)
   return card
+}
+
+function autoNote(p) {
+  const note = el('div', 'note')
+  note.append(el('span', 'dot'), el('span', null, `已按会话授权放行 · ${label(p.tool)}`))
+  addTurn('turn-note', note)
 }
 
 function artifactCard(p) {
   const card = el('div', 'artifact')
-  card.append(el('div', 'ico', '▤'))
-  const meta = el('div')
-  meta.append(el('div', 'nm', p.path), el('div', 'sz', `${p.mime || 'file'} · ${p.size || 0} B`))
-  card.append(meta)
+  const ico = el('div', 'ico')
+  ico.innerHTML = FILE_ICON
+  const meta = el('div', 'meta')
+  const name = el('div', 'nm', p.path)
+  const size = el('div', 'sz mono', `${p.mime || 'file'} · ${p.size || 0} B`)
+  meta.append(name, size)
+
+  const href =
+    `/api/artifacts/${encodeURIComponent(state.runId)}/` +
+    p.path.split('/').map(encodeURIComponent).join('/') +
+    `?token=${encodeURIComponent(token)}`
+
   const acts = el('div', 'acts')
-  const href = `/api/artifacts/${encodeURIComponent(state.runId)}/${p.path
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}?token=${encodeURIComponent(token)}`
   const preview = el('a', 'btn', '预览')
   preview.href = href
   preview.target = '_blank'
   preview.rel = 'noopener'
-  const dl = el('a', 'btn primary', '下载')
+  const dl = el('a', 'btn', '下载')
   dl.href = href
   dl.setAttribute('download', '')
   acts.append(preview, dl)
-  card.append(acts)
-  streamBox().append(card)
-  $('#artifacts').querySelector('.muted')?.remove()
-  $('#artifacts').append(card.cloneNode(true))
+
+  card.append(ico, meta, acts)
+  addTurn('turn-artifact', card)
+
+  const side = $('#artifacts')
+  side.querySelector('.muted')?.remove()
+  side.append(card.cloneNode(true))
 }
 
-function setStatus(text, done) {
-  $('#runbar').hidden = false
+function setStatus(text, kind) {
+  const bar = $('#runbar')
+  bar.hidden = false
+  bar.dataset.state = kind
   $('#runlabel').textContent = text
-  if (done) $('#runbar').classList.add('done')
+  if (kind === 'done') setTimeout(() => { if (bar.dataset.state === 'done') bar.hidden = true }, 1400)
 }
 
 function handleEvent(type, p) {
   if (type === 'text.delta') {
-    const b = state.assistant || assistantBubble()
-    b.textContent += p.text
+    ensureAssistant().textContent += p.text
   } else if (type === 'tool.started') {
+    if (p.args) state.toolArgs.set(p.callId, p.args)
     toolCard(p)
-    setStatus(`正在执行 ${p.tool} · 0s`, false)
+    setStatus(`${label(p.tool)} · 执行中`, 'running')
   } else if (type === 'approval.requested') {
+    state.toolArgs.set(p.callId, p.args)
+    setToolState(p.callId, 'muted', '等待确认')
     approvalCard(p)
-    setStatus('等待你确认', false)
-    // 截图模式：拿到审批卡后断开长连接，让页面进入 network idle
-    if (qs.get('shot') === '1') setTimeout(() => state.es?.close(), 300)
+    setStatus('等待你确认', 'waiting')
   } else if (type === 'approval.auto_approved') {
-    const box = streamBox()
-    const note = el('div', 'card auto')
-    const head = el('div', 'card-head')
-    head.append(el('span', 'name', `已按会话授权自动放行：${p.tool}`), el('span', 'status ok', 'auto'))
-    note.append(head)
-    box.append(note)
-    setStatus('执行完成', false)
+    setToolState(p.callId, 'running', '自动放行')
+    autoNote(p)
+    setStatus('自动放行 · 执行中', 'running')
   } else if (type === 'approval.decided') {
-    document.querySelectorAll('.approval').forEach((c) => {
-      if (!c.dataset.decision) c.dataset.decision = p.decision
-    })
+    if (p.decision === 'deny') setToolState(p.callId, 'muted', '已拒绝')
+    else setToolState(p.callId, 'running', '执行中')
   } else if (type === 'tool.finished') {
-    const card = document.querySelector('.card.tool .status')
-    if (card) { card.textContent = '完成'; card.className = 'status ok' }
-    setStatus('执行完成', false)
+    setToolState(p.callId, p.ok ? 'ok' : 'error', p.ok ? '完成' : p.error === 'denied_by_policy' ? '已拒绝' : '失败')
+    setStatus(p.ok ? '执行完成' : '执行失败', 'running')
   } else if (type === 'artifact.created') {
     artifactCard(p)
   } else if (type === 'run.finished') {
-    setStatus('完成', true)
-    setTimeout(() => { $('#runbar').hidden = true }, 800)
+    setStatus('完成', 'done')
     state.es?.close()
   } else if (type === 'run.canceled') {
-    setStatus('已取消', true)
+    setStatus('已取消', 'done')
+    state.es?.close()
+  } else if (type === 'run.failed') {
+    setStatus('失败', 'done')
     state.es?.close()
   }
 }
@@ -171,7 +236,10 @@ function handleEvent(type, p) {
 function subscribe(runId) {
   const es = new EventSource(`/api/runs/${runId}/events?token=${encodeURIComponent(token)}`)
   state.es = es
-  for (const t of ['text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved', 'approval.decided', 'tool.finished', 'artifact.created', 'run.finished', 'run.canceled', 'run.failed']) {
+  for (const t of [
+    'text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved',
+    'approval.decided', 'tool.finished', 'artifact.created', 'run.finished', 'run.canceled', 'run.failed',
+  ]) {
     es.addEventListener(t, (e) => {
       try { handleEvent(t, JSON.parse(e.data)) } catch {}
     })
@@ -180,32 +248,30 @@ function subscribe(runId) {
 
 async function send(text) {
   if (!text.trim()) return
-  appendUser(text)
-  assistantBubble()
-  $('#input').value = ''
-  setStatus('已提交，等待规划', false)
-  const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
-  if (status !== 202) { setStatus('提交失败', true); return }
-  state.runId = body.runId
+  addUser(text)
+  state.assistant = null
   state.decided = false
+  $('#input').value = ''
+  setStatus('已提交', 'running')
+  const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
+  if (status !== 202) { setStatus('提交失败', 'done'); return }
+  state.runId = body.runId
   subscribe(body.runId)
 }
-
-$('#revoke').addEventListener('click', async () => {
-  const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
-  $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条本会话授权` : `撤销失败（${status}）`
-})
 
 async function loadHistory() {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/messages`)
   if (status !== 200 || !body.messages?.length) return
   for (const m of body.messages) {
-    if (m.role === 'user') appendUser(m.content)
-    else {
-      const b = assistantBubble()
-      b.textContent = m.content
-    }
+    if (m.role === 'user') addUser(m.content)
+    else { state.assistant = null; ensureAssistant().textContent = m.content }
   }
+}
+
+async function cancelRun() {
+  if (state.runId) await api(`/api/runs/${state.runId}/cancel`, { method: 'POST', body: '{}' })
+  state.es?.close()
+  setStatus('已停止', 'done')
 }
 
 async function boot() {
@@ -214,23 +280,21 @@ async function boot() {
     return
   }
   const me = await api('/api/me')
-  $('#who').textContent = me.status === 200 ? me.body.tenantId : 'unauth'
+  $('#who').textContent = me.status === 200 ? `tenant ${me.body.tenantId}` : '未认证'
+
   const v = await fetch('/api/version').then((r) => r.json()).catch(() => ({ sha: '-' }))
-  $('#ver').textContent = v.sha
+  $('#ver').textContent = `build ${v.sha}`
 
   const { body } = await api('/api/sessions')
   const ul = $('#sessions')
-  ul.innerHTML = ''
+  ul.textContent = ''
   for (const s of body.sessions || []) {
-    const li = el('li', s.id === 's_a1' ? 'active' : '', s.title)
+    const li = el('li', s.id === state.sessionId ? 'active' : '', s.title)
     ul.append(li)
   }
 
   await loadHistory()
-
-  if (demo) {
-    await send('把这三个 PDF 汇总成一份带目录的 docx')
-  }
+  if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
 
 $('#composer').addEventListener('submit', (e) => {
@@ -239,24 +303,15 @@ $('#composer').addEventListener('submit', (e) => {
 })
 $('#input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#input').value) }
-  if (e.key === 'Escape') {
-    if (state.runId) api(`/api/runs/${state.runId}/cancel`, { method: 'POST', body: '{}' })
-    state.es?.close()
-    setStatus('已停止', true)
-  }
+  if (e.key === 'Escape') cancelRun()
 })
 for (const chip of document.querySelectorAll('.chip')) {
   chip.addEventListener('click', () => { $('#input').value = chip.dataset.fill })
 }
-$('#stop').addEventListener('click', async () => {
-  if (state.runId) await api(`/api/runs/${state.runId}/cancel`, { method: 'POST', body: '{}' })
-  state.es?.close()
-  setStatus('已停止', true)
-})
-
+$('#stop').addEventListener('click', cancelRun)
 $('#revoke').addEventListener('click', async () => {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
-  $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条本会话授权` : `撤销失败（${status}）`
+  $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条授权` : `撤销失败（${status}）`
 })
 
 boot()

@@ -10,16 +10,21 @@
 <div class="app">
   <nav class="nav">
     <div class="brand">cube<span>·agent</span></div>
-    <div class="nav-title">会话</div>
-    <ul id="sessions" class="sessions"></ul>
-    <div class="nav-foot"><span id="ver">-</span><span id="who">-</span></div>
+    <div class="nav-group">
+      <div class="nav-label">会话</div>
+      <ul id="sessions" class="sessions"></ul>
+    </div>
+    <div class="nav-foot">
+      <span id="ver" class="mono">build -</span>
+      <span id="who" class="mono">-</span>
+    </div>
   </nav>
 
   <main class="main">
     <header class="topbar">
       <h1 id="title">新会话</h1>
       <div class="run" id="runbar" hidden>
-        <div class="bar"><i></i></div>
+        <span class="dot" id="rundot"></span>
         <span id="runlabel">正在执行</span>
         <button class="ghost" id="stop">停止</button>
       </div>
@@ -27,32 +32,39 @@
 
     <section id="stream" class="stream">
       <div class="empty" id="empty">
-        <h2>目标 → 规划 → 工具 → 产物</h2>
-        <p>说出你要完成的事，Agent 会调用工具，并在危险操作前请求你确认。</p>
+        <h2>把目标交给它，它自己选工具</h2>
+        <p>危险动作执行前会停下来等你确认，产物落进会话工作区。</p>
         <div class="examples">
           <button class="chip" data-fill="把这三个 PDF 汇总成一份带目录的 docx">把三个 PDF 汇总成 docx</button>
           <button class="chip" data-fill="查一下这个库的构建失败原因">查构建失败原因</button>
           <button class="chip" data-fill="把这段结论写进知识库">写进知识库</button>
         </div>
-        <p class="hint">支持拖入文件</p>
       </div>
     </section>
 
     <form class="composer" id="composer">
-      <textarea id="input" rows="1" placeholder="描述目标，Enter 发送 / Shift+Enter 换行 / Esc 停止"></textarea>
-      <div class="composer-right">
+      <div class="composer-row">
+        <textarea id="input" rows="1" placeholder="描述你要完成的事"></textarea>
         <button type="submit" id="send">发送</button>
+      </div>
+      <div class="composer-hint">
+        <span><kbd>Enter</kbd> 发送</span>
+        <span><kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
+        <span><kbd>Esc</kbd> 停止</span>
       </div>
     </form>
   </main>
 
   <aside class="side">
-    <div class="side-title">上下文</div>
-    <div id="artifacts" class="artifacts"><p class="muted">产物会出现在这里</p></div>
-    <div class="side-foot">
-      <button class="btn" id="revoke">撤销本会话授权</button>
-      <p class="muted" id="grants">—</p>
-    </div>
+    <section class="side-block">
+      <div class="side-label">产物</div>
+      <div id="artifacts" class="artifacts"><p class="muted">还没有产物</p></div>
+    </section>
+    <section class="side-block">
+      <div class="side-label">本会话授权</div>
+      <p class="muted" id="grants">尚未授权任何工具</p>
+      <button class="btn quiet" id="revoke">撤销本会话授权</button>
+    </section>
   </aside>
 </div>
 <script src="/app.js"></script>
