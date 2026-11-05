@@ -7,7 +7,7 @@ import { createUpgrade, createUpgradeRoute } from './upgrade.mjs'
 import { execFileSync } from 'node:child_process'
 import { EventLog } from './events.mjs'
 import { RunController } from './runs.mjs'
-import { handleLiveEvents, parseLastEventId } from './sse.mjs'
+import { handleLiveEvents, handleEventsRequest, parseLastEventId } from './sse.mjs'
 import { AgentLoop } from './loop.mjs'
 import { createTools } from './tools.mjs'
 import { createDriverFromEnv } from './model.mjs'
@@ -277,7 +277,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (ctx.error) { res.writeHead(401, { 'content-type': 'application/json' }); return res.end('{"error":"unauthenticated"}') }
       const runId = decodeURIComponent(evm[1])
       if (!rc.status(runId)) { res.writeHead(404); return res.end() }
-      return handleLiveEvents({ req, res, log, rc, runId, lastEventId: parseLastEventId(req.headers['last-event-id'], url.searchParams.get('lastEventId')) })
+      const lastEventId = parseLastEventId(req.headers['last-event-id'], url.searchParams.get('lastEventId'))
+      // replay=1：只回放快照后关闭（轮询/测试用）；默认保持长连接实时推送
+      if (url.searchParams.get('replay') === '1') {
+        return handleEventsRequest({ res, log, runId, lastEventId })
+      }
+      return handleLiveEvents({ req, res, log, rc, runId, lastEventId })
     }
 
     // —— 创建 run（跑到审批处停下）——
