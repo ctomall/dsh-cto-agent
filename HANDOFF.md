@@ -1,6 +1,6 @@
 # 交接：两处未完成项与放行步骤
 
-> 现状（`scripts/acceptance.sh` 输出）：**pass=14 fail=0 skip=2**
+> 现状（`scripts/acceptance.sh` 输出）：**pass=19 fail=0 skip=2**
 > 两个 SKIP 不是"大概做完了"，是**没做**。下面是把它变成 PASS 的完整步骤，任何有权限的人照着做即可。
 
 ---
@@ -38,6 +38,19 @@ sudo systemctl restart cube-agent.service
 **回滚**：删掉 `/etc/cube-agent/env` 里的 `MODEL_*` 三行 → 重启（会退回 fake，`model_real` 变 0）。
 
 ---
+
+## 已就绪的运维/安全能力（2026-11-06 收敛）
+
+| 能力 | 位置 | 复核方式 |
+|---|---|---|
+| 部署与开发解耦 | 服务跑 `/opt/cube-agent`，单元 `WorkingDirectory=/opt/cube-agent/impl` | `systemctl show -p WorkingDirectory --value cube-agent.service` |
+| 一键升级（ff-only + 测试门禁 + 回滚） | `/api/admin/upgrade`、`UPGRADE_RUN_TESTS=1` | 调用后用 `/api/version` 比对；门禁失败会 `rolled_back` |
+| 部署完整性检测 | `acceptance.sh` 的「部署目录干净」 | 克隆有未提交改动即 FAIL |
+| 定时备份 | `cube-agent-backup.timer`（03:30，Persistent） | `systemctl list-timers cube-agent-backup.timer` |
+| 恢复演练（含负向） | `scripts/restore-drill.sh 8790 --from-latest` | 最新备份 `integrity_check` + 还原实例 + 破坏副本必须被识别 |
+| 安全契约与租户矩阵 | `SECURITY.md`、`impl/test/tenant-matrix.test.mjs` | `node --test` |
+| 用例有效性（变异探针） | `scripts/mutation-probe.sh` | 注入实现变异，关键用例必须变红 |
+| 一键复核 | `scripts/verify-all.sh` | SKIP 时 exit 3，不伪装通过 |
 
 ## ② 会话级审批 scope（已完成，保留说明）
 
@@ -80,6 +93,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://cto.ila3.top/        # 期望 3
 
 ## 守则（别绕过）
 
-- 升级只走 `scripts/upgrade.sh`（ff-only + 测试门禁 + 失败回滚），不要手工 `git pull` 后直接重启
+- 升级只走 `/api/admin/upgrade` 或 `scripts/upgrade.sh`（ff-only + 测试门禁 + 失败回滚），不要手工 `git pull` 后直接重启
+- **不要直接改 `/opt/cube-agent` 里的文件**：验收器的「部署目录干净」会立刻红；改代码只改开发工作区并走提交推送
 - 密钥只进 `/etc/cube-agent/`（0600）或环境变量，**永不入库**
 - 验收器报 SKIP 就如实记录 SKIP，不要改判据凑 PASS
