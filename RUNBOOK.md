@@ -155,4 +155,4 @@ ls -la /var/backups/cube-agent                     # 产物（默认保留最近
 ./scripts/restore-drill.sh 8790                 # 或现场新做一份再还原
 ```
 
-校验项：最新备份存在 → `integrity_check=ok` → 还原副本 → 独立实例 `/healthz` → `/api/overview` 可用 → 行数与还原库一致。
+校验项：最新备份存在 → `integrity_check=ok` → 还原副本 → 独立实例 `/healthz` → `/api/overview` 可用 → 行数与还原库一致 → **负向：故意损坏一份副本，`integrity_check` 必须报错**（证明"损坏能被发现"）。

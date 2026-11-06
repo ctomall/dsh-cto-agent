@@ -50,5 +50,27 @@ echo "$ov" | grep -q '"sessions"' && ok "总览 API 可用" "sessions 字段存�
 msgs=$(node -e "const {DatabaseSync}=require('node:sqlite');const d=new DatabaseSync(process.argv[1],{readOnly:true});console.log(d.prepare('select count(*) c from messages').get().c)" "$WORK/restored.db")
 echo "$ov" | grep -q "\"messages\":$msgs" && ok "行数一致" "messages=$msgs" || no "行数一致" "备份 messages=$msgs 与 API 不符"
 
+echo "== 5) 负向：损坏的备份必须被识别（不是所有备份都能恢复）"
+if [ -n "${BK:-}" ] && [ -f "$BK" ]; then
+  cp "$BK" "$WORK/corrupt.db"
+  # 在数据区中间写一段随机字节：模拟磁盘损坏/写入中断
+  dd if=/dev/urandom of="$WORK/corrupt.db" bs=4096 seek=2 count=2 conv=notrunc status=none 2>/dev/null
+  res=$(node -e "
+const {DatabaseSync}=require('node:sqlite');
+try {
+  const d=new DatabaseSync(process.argv[1],{readOnly:true});
+  console.log('integrity=' + d.prepare('pragma integrity_check').get().integrity_check);
+} catch (e) { console.log('error=' + String(e.message||e).split('\n')[0]); }
+" "$WORK/corrupt.db" 2>&1)
+  # 只要不是干净的 integrity=ok，就说明损坏被发现了（SQLite 可能返回多行细节或抛错）
+  if ! printf '%s' "$res" | grep -qx 'integrity=ok'; then
+    ok "损坏备份被识别" "$(printf '%s' "$res" | head -c 60)"
+  else
+    no "损坏备份被识别" "损坏后仍报 $res"
+  fi
+else
+  no "损坏备份被识别" "没有可比对的备份文件"
+fi
+
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
