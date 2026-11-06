@@ -174,3 +174,4 @@ sudo journalctl -u cube-agent-restore-drill.service -n 20 # 期望最后一行 p
 - 窗口约 2–5 秒；**不是故障，但会被外部监控记一次失败**
 - 建议：升级放在低峰；外部探活用 2 次重试消除该窗口（`scripts/verify-online.sh` 已对 000/502/503/504 重试）
 - 判据：本机 `/healthz` 200 + 公网连续 3 次 200 才算恢复
+- **验收不要在升级重启窗口里跑**：进程退出到 systemd 拉起之间（约 2–5s）请求会 401/502，`acceptance.sh` 的第 0.2 步会先确认版本稳定再往下走

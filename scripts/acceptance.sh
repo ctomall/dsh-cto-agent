@@ -27,6 +27,19 @@ ready=0
 for i in $(seq 1 40); do [ "$(code "$BASE/healthz")" = 200 ] && { ready=$i; break; }; sleep 1; done
 [ "$ready" -gt 0 ] && ok "healthz" "${ready}s" || no "healthz" "40s 未就绪"
 
+echo "== 0.2) 版本稳定（升级会重启进程，验收不能在重启窗口里跑）"
+v1=$(curl -s -m 10 "$BASE/api/version" 2>/dev/null); sleep 1
+v2=$(curl -s -m 10 "$BASE/api/version" 2>/dev/null)
+if [ "$v1" = "$v2" ] && [ -n "$v1" ]; then
+  ok "版本稳定" "$v2"
+else
+  echo "  … 版本在变（$v1 → $v2），等待 6s 让重启完成"
+  sleep 6
+  v3=$(curl -s -m 10 "$BASE/api/version" 2>/dev/null)
+  v4=$(curl -s -m 10 "$BASE/api/version" 2>/dev/null)
+  [ "$v3" = "$v4" ] && ok "版本稳定" "$v4" || no "版本稳定" "仍在变化：$v3 → $v4"
+fi
+
 echo "== 0.5) 登录（后续用例都要 Cookie）"
 lc=""
 for attempt in 1 2 3; do
