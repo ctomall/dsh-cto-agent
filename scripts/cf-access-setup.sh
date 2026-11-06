@@ -46,12 +46,18 @@ PY
 )
 
 # 3) 边缘速率限制（应用层也有一份，双保险）
+# 注意：规则集入口（rulesets entrypoint）的 PUT 体必须是 {"rules":[...]}，
+# 直接把规则平铺在顶层会被 CF 拒绝（这是接入前最容易踩的一脚）。
 RATELIMIT_PAYLOAD=$(cat <<JSON
 {
-  "description": "cube-agent edge rate limit",
-  "expression": "(http.host eq \"${HOST}\" and starts_with(http.request.uri.path, \"/api/\"))",
-  "action": "block",
-  "ratelimit": { "characteristics": ["ip.src"], "period": 60, "requests_per_period": 120, "mitigation_timeout": 60 }
+  "rules": [
+    {
+      "description": "cube-agent edge rate limit",
+      "expression": "(http.host eq \"${HOST}\" and starts_with(http.request.uri.path, \"/api/\"))",
+      "action": "block",
+      "ratelimit": { "characteristics": ["ip.src"], "period": 60, "requests_per_period": 120, "mitigation_timeout": 60 }
+    }
+  ]
 }
 JSON
 )
@@ -65,6 +71,19 @@ echo "--- 3) PUT $API/zones/\$CF_ZONE_ID/rulesets/phases/http_ratelimit/entrypoi
 echo "$RATELIMIT_PAYLOAD"
 
 if [ "$MODE" = "dry-run" ]; then
+  # 结构自检：没有 token 也能验证"要发的三份 JSON 形状对不对"
+  python3 - "$APP_PAYLOAD" "$POLICY_PAYLOAD" "$RATELIMIT_PAYLOAD" "$HOST" <<'PY'
+import json, sys
+app, pol, rl, host = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+a, p, r = json.loads(app), json.loads(pol), json.loads(rl)
+assert a["type"] == "self_hosted" and a["domain"] == host, "Access 应用必须 self_hosted 且 domain 正确"
+assert p["decision"] == "allow" and p["include"], "策略必须 allow 且有 include 条件"
+assert isinstance(r.get("rules"), list) and r["rules"], "限流必须是 rulesets 形状（rules 数组）"
+rule = r["rules"][0]
+assert rule["action"] == "block" and "ratelimit" in rule, "限流规则缺少 action/ratelimit"
+assert rule["ratelimit"]["period"] >= 10, "限流周期不合理"
+print("== 结构自检通过：access app / policy / ratelimit 三份 payload 形状正确")
+PY
   echo "== dry-run：未发送任何请求"
   exit 0
 fi
