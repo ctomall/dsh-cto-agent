@@ -42,3 +42,25 @@ test('升级路由：未配置 token → 503（未启用要明说，不能静默
   const route = createUpgradeRoute({ token: '', upgradeOnce: async () => ({ ok: true }) })
   assert.equal((await route({ headers: {} })).status, 503)
 })
+
+// 口令门 + 升级 token 是两层：**有正确 token 但没有会话 Cookie，仍然进不来**。
+// 线上实测过这条组合，但此前没有用例（其它用例要么没开 APP_PASSWORD，要么没带 token）。
+test('口令门开启时：正确 token 但无 Cookie → 401（门在 token 之前）', async (t) => {
+  const base = await boot(t, { APP_PASSWORD: 'pw-x', APP_SESSION_SECRET: 's-x-1234567890' })
+  const r = await post(base, { 'x-upgrade-token': 'right-token' })
+  assert.equal(r.status, 401, `应被口令门挡住，实际 ${r.status}`)
+})
+
+test('口令门开启 + 有 Cookie 但无 token → 401', async (t) => {
+  const base = await boot(t, { APP_PASSWORD: 'pw-y', APP_SESSION_SECRET: 's-y-1234567890' })
+  const login = await fetch(`${base}/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'password=pw-y',
+    redirect: 'manual',
+  })
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0]
+  assert.ok(cookie.startsWith('cube_session='), '登录应下发 Cookie')
+  const r = await post(base, { cookie })
+  assert.equal(r.status, 401, `有 Cookie 无 token 应 401，实际 ${r.status}`)
+})
