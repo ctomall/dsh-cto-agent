@@ -621,7 +621,16 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         if (!ev) continue
         let p = {}
         try { p = JSON.parse(ev.payload_json) } catch {}
-        pending.push({ runId: r.id, callId: p.callId ?? null, tool: p.action ?? null, target: p.target ?? null, impact: p.impact ?? null, args: p.args ?? null })
+        // 把 argsTruncated 一起带出去：还原的审批卡也要承认"参数是摘要"
+        pending.push({
+          runId: r.id,
+          callId: p.callId ?? null,
+          tool: p.action ?? null,
+          target: p.target ?? null,
+          impact: p.impact ?? null,
+          args: p.args ?? null,
+          ...(p.argsTruncated ? { argsTruncated: true } : {}),
+        })
       }
       return reply(res, json(200, { pending }))
     }

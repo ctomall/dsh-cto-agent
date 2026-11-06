@@ -382,7 +382,10 @@ async function loadPending() {
     state.decided = false
     toolCard({ tool: p.tool, callId: p.callId })
     setToolState(p.callId, 'muted', '等待确认')
-    approvalCard({ runId: p.runId, action: p.tool, target: p.target, impact: p.impact, args: p.args, callId: p.callId })
+    approvalCard({
+      runId: p.runId, action: p.tool, target: p.target, impact: p.impact, args: p.args, callId: p.callId,
+      ...(p.argsTruncated ? { argsTruncated: true } : {}),
+    })
     // 从「当前最后一条事件」开始订阅：既拿到后续进展，又不把已渲染的旧事件再放一遍
     const seq = await lastSeq(p.runId)
     subscribe(p.runId, { lastEventId: seq })
