@@ -39,8 +39,9 @@ const ver = run('curl', ['-s', '-m', '5', `${base}/api/version`])
 add('线上版本', ver.out || '不可达', '')
 
 // 5) 关键能力（有则为"已验证"，无则如实标"未验证"）
-const drills = ['check-approval-truncation.mjs', 'check-no-dup-stream.mjs', 'check-failure-reason.mjs']
-add('浏览器级演练脚本', drills.every((d) => existsSync(`scripts/${d}`)) ? `已就绪（${drills.length} 个）` : '缺失', '需 CDP :9222')
+// 演练脚本数量从目录里数，别写死（写死就会像之前那样长期停在"3 个"）
+const drills = readdirSync('scripts').filter((f) => /^check-.*\.(mjs|sh)$/.test(f))
+add('浏览器级/自检演练', drills.length > 0 ? `已就绪（${drills.length} 个：${drills.slice(0, 4).join(', ')}…）` : '缺失', '多数需 CDP :9222')
 add('provider 一致性脚本', existsSync('scripts/provider-conformance.mjs') ? '已就绪' : '缺失', '接真 key 当天先跑它')
 
 const width = Math.max(...rows.map((r) => r.k.length))
