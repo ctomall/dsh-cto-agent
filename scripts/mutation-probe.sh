@@ -67,5 +67,14 @@ s=s.replace(old,new,1).replace('.get(tenantId, sessionId, tool)','.get(tenantId,
 io.open(p,'w',encoding='utf-8').write(s)
 " impl/test/grants-isolation.test.mjs impl/test/grants-scope.test.mjs
 
+probe "UI：本会话允许退化成允许一次" impl/web/app.js "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old=\"sess.addEventListener('click', () => decide('allow_session'))\"
+new=\"sess.addEventListener('click', () => decide('allow_once'))\"
+assert s.count(old)==1
+io.open(p,'w',encoding='utf-8').write(s.replace(old,new,1))
+" impl/test/ui-approval-decisions.test.mjs
+
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
