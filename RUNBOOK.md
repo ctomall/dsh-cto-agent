@@ -241,3 +241,28 @@ node scripts/gen-scripts-index.mjs   # 重建 scripts/README.md
 
 `docs-check` 会校验 `scripts/README.md` 与 `scripts/` 目录完全一致：
 **新加脚本必须重建索引**，否则复核会红（防止"脚本加了但没人知道它存在"）。
+
+## 浏览器级检查一览（cdp-*.mjs）
+
+这些脚本用 CDP 驱动真实浏览器验证"界面到底有没有做到"。它们不进常规门禁（需要 9222 与 chromium），
+但**每一条都对应一个具体承诺**，排查时直接跑对应那条即可。
+
+| 脚本 | 验证什么 | 现状 |
+|---|---|---|
+| `cdp-public-flow.mjs` | 公网页面全链路：登录 → 输入目标 → 审批卡 → 允许一次 → 产物 | 在用 |
+| `cdp-public-pages.mjs` | 公网 Cookie 模式下四页（总览/产物/设置/工作台）都能出数据 | 在用 |
+| `cdp-grant-ui-check.mjs` | ② 的 UI 承诺：同会话第二次不再弹卡，改显示「已按会话授权放行」 | 在用 |
+| `cdp-cross-session-check.mjs` | ② 的另一半：跨会话必须重新弹卡 | 在用 |
+| `cdp-revoke-ui-check.mjs` | 授权生命周期：允许 → 可见 → 撤销 → 清空 → 再调用重新弹卡 | 在用 |
+| `cdp-pending-ui-check.mjs` | 刷新后审批卡还原，点「允许一次」后产出出现 | 在用 |
+| `cdp-xss-check.mjs` | 会话标题里的 HTML/脚本载荷按纯文本渲染 | 在用 |
+| `cdp-artifact-download-check.mjs` | html 产物即使 `inline=1` 也只能下载，不能渲染成页面 | 在用 |
+| `cdp-frame-check.mjs` | 点击劫持：iframe 嵌审批页必须被拒绝；顶层直开作对照 | 在用 |
+| `cdp-driver-check.mjs` | 状态栏如实显示"演示驱动 / 真实驱动" | 在用 |
+| `cdp-429-check.mjs`、`cdp-probe-ui-check.mjs` | 限流提示文案、探针按钮结果展示 | 在用 |
+| `cdp-delete-check.mjs`、`cdp-delete-row-check.mjs` | 会话删除（保留会话 vs 删除行两种路径） | 优先用 `check-session-ops.mjs`（确定性临时实例） |
+| `cdp-rename-check.mjs`、`cdp-session-filter-check.mjs` | 重命名、会话筛选 | 优先用 `check-session-ops.mjs` |
+| `cdp-approval-decided-check.mjs` | 审批后卡片状态与按钮禁用 | 在用 |
+
+**说明**：带"优先用 …"的几条是早期针对公网写的版本，公网链路抖动会让它们不稳定；
+同名的确定性覆盖已移到 `check-*.mjs`（临时实例 + CDP），**保留旧脚本作为历史证据，不再作为门禁**。
