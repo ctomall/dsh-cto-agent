@@ -26,7 +26,7 @@ echo "== 3) 登录后放行"
 if [ -f "$PW_FILE" ]; then
   PW=$(cut -d= -f2- "$PW_FILE")
   jar=$(mktemp)
-  lc=$(curl -s -o /dev/null -c "$jar" -w '%{http_code}' -m 15 -X POST -d "password=$PW" "$BASE/login")
+  lc=$(login_cookie "$BASE" "$jar" "$PW")
   [ "$lc" = "302" ] && ok "登录提交" "302" || no "登录提交" "期望 302，实际 $lc"
   [ "$(code -b "$jar" "$BASE/")" = "200" ] && ok "带 Cookie 首页" "200" || no "带 Cookie 首页" "期望 200"
   T_A=$(cut -d= -f2- .runtime-tokens 2>/dev/null | head -1)

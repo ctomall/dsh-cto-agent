@@ -3,6 +3,7 @@
 # 用法：scripts/first-real-run.sh [BASE]      默认 http://127.0.0.1:8787
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+. scripts/lib-login.sh
 BASE="${1:-http://127.0.0.1:8787}"
 GOAL="${GOAL:-写一份验收报告到 real-run.md}"
 
@@ -15,7 +16,14 @@ no(){ printf '  ✖ %-30s %s\n' "$1" "$2"; exit 1; }
 
 echo "== 0) 就绪"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$BASE/healthz")" = 200 ] || no "healthz" "不可达：$BASE"
-[ -n "$PW" ] && curl -s -o /dev/null -c "$JAR" -m 20 -X POST -d "password=$PW" "$BASE/login"
+if [ -n "$PW" ]; then
+  lc=$(login_cookie "$BASE" "$JAR" "$PW") || no "登录" "重试后仍被限流（$lc）"
+  case "$lc" in
+    302) : ;;
+    401) echo "  … 该实例未开启口令门（登录返回 401），跳过登录" ;;
+    *) no "登录" "期望 302，实际 $lc" ;;
+  esac
+fi
 
 echo "== 1) 模型必须是真实的（桩驱动直接拒绝）"
 st=$(curl -s -m 10 -b "$JAR" -H "Authorization: Bearer $TOK_A" "$BASE/api/model/status")
