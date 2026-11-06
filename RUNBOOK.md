@@ -272,6 +272,21 @@ node scripts/gen-scripts-index.mjs   # 重建 scripts/README.md
 `docs-check` 会校验 `scripts/README.md` 与 `scripts/` 目录完全一致：
 **新加脚本必须重建索引**，否则复核会红（防止"脚本加了但没人知道它存在"）。
 
+## verify-all 的耗时与判读（2026-11-06 实测）
+
+`scripts/verify-all.sh` 一次完整跑完约 **10 分钟**（含 mock 真驱动验收、first-real-run、浏览器演练）。
+**别把它当成卡死**。判读方式：
+
+| 输出 | 含义 |
+|---|---|
+| `✔ node --test 282/282` | 全量单元/集成测试 |
+| `○ acceptance pass=22 fail=0 skip=2` | ①③ 因缺凭据 SKIP（**这是当前正常状态**） |
+| `✔ docs-check 11/0` | 文档数字与实测一致 |
+| `✔ 浏览器级演练` | 失败原因/不重复/截断提示三条 |
+| `== 结论：pass=7 fail=0 skip=1` | exit=3：**还有 SKIP，目标未完成**（不是失败） |
+
+`exit 3` ≠ 失败：它表示"有 SKIP"，与 `fail>0`（真失败）必须区别对待。
+
 ## 浏览器级检查一览（cdp-*.mjs）
 
 这些脚本用 CDP 驱动真实浏览器验证"界面到底有没有做到"。它们不进常规门禁（需要 9222 与 chromium），
