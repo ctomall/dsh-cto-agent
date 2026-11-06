@@ -44,7 +44,12 @@ export class RunController {
     if (!from) throw new Error(`unknown run: ${runId}`)
     const allowed = ALLOWED[from] ?? []
     if (!allowed.includes(to)) throw new Error(`illegal transition: ${from} -> ${to}`)
-    this.db.prepare('update runs set status = ? where id = ?').run(to, runId)
+    // 进入终态时补写 ended_at：否则这条列只有失败路径会写，时长统计永远缺一半
+    if (['done', 'failed', 'canceled'].includes(to)) {
+      this.db.prepare('update runs set status = ?, ended_at = ? where id = ?').run(to, new Date().toISOString(), runId)
+    } else {
+      this.db.prepare('update runs set status = ? where id = ?').run(to, runId)
+    }
     return to
   }
 
