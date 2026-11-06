@@ -35,6 +35,19 @@ case "$code" in
   *) no "acceptance" "$sum（exit=$code）" ;;
 esac
 
+echo "== 6) 文档与实测一致"
+acc=$(sed -n 's/^== 汇总：pass=\([0-9]*\) fail=\([0-9]*\) skip=\([0-9]*\)$/\1 \2 \3/p' /tmp/va.log | tail -1)
+if [ -n "$acc" ]; then
+  set -- $acc
+  if ./scripts/docs-check.sh --from "pass=$1 fail=$2 skip=$3" >/tmp/vd.log 2>&1; then
+    ok "docs-check" "$(grep -E '^== 汇总' /tmp/vd.log | tail -1)"
+  else
+    no "docs-check" "$(grep -E '✖' /tmp/vd.log | head -2 | tr '\n' ' ')"
+  fi
+else
+  sk "docs-check" "没有验收汇总可比对"
+fi
+
 echo
 echo "== 结论：pass=$pass fail=$fail skip=$skip"
 [ "$fail" -eq 0 ] || exit 1

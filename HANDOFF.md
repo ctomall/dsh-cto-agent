@@ -1,6 +1,8 @@
 # 交接：两处未完成项与放行步骤
 
 > 现状（`scripts/acceptance.sh` 输出）：**pass=19 fail=0 skip=2**
+
+<!-- acceptance: pass=19 fail=0 skip=2 -->
 > 两个 SKIP 不是"大概做完了"，是**没做**。下面是把它变成 PASS 的完整步骤，任何有权限的人照着做即可。
 
 ---

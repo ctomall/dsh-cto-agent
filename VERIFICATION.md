@@ -87,6 +87,8 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 
 ## 当前结论（2026-11-06）
 
+<!-- acceptance: pass=19 fail=0 skip=2 -->
+
 | 计划 | 状态 | 差距 |
 |---|---|---|
 | ② 会话级审批 scope | **PASS** | — |
