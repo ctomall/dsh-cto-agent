@@ -40,9 +40,33 @@ async function main() {
     row('升级后自重启', body.upgrade?.exitAfter ? '开启' : '关闭'),
     row('限流 api / runs / upgrade / login', [body.limits?.api?.limit, body.limits?.runs?.limit, body.limits?.upgrade?.limit, body.limits?.login?.limit].map((n) => `${n}/分`).join(' · '))
   )
+  // 模型连通性探针：接上 key 后先"试一句"，再跑真任务
+  const probeRow = document.createElement('div')
+  probeRow.className = 'set-row'
+  const k = document.createElement('div'); k.className = 'set-key'; k.textContent = '模型连通性'
+  const v = document.createElement('div'); v.className = 'set-val'
+  const btn = document.createElement('button'); btn.className = 'btn'; btn.id = 'probe'; btn.textContent = '测试连接'
+  const out = document.createElement('span'); out.id = 'probe-out'; out.style.marginLeft = '10px'
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; out.textContent = '测试中…'
+    try {
+      const r = await fetch('/api/model/probe', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} })
+      const j = await r.json().catch(() => ({}))
+      if (r.status === 200 && j.ok) out.textContent = `✔ ${j.driver} · ${j.ms}ms · ${JSON.stringify(j.sample)}`
+      else if (j.error === 'driver_is_stub') out.textContent = '桩驱动：先配置 MODEL_* 并重启'
+      else out.textContent = `�� 失败：${j.message ?? j.error ?? r.status}`
+    } catch (e) {
+      out.textContent = '✖ 网络错误'
+    } finally {
+      btn.disabled = false
+    }
+  })
+  v.append(btn, out)
+  probeRow.append(k, v)
+
   const note = document.createElement('p')
   note.className = 'muted'
   note.textContent = '这里不展示令牌、口令、模型密钥与数据库绝对路径。'
-  list.append(note)
+  list.append(probeRow, note)
 }
 main()

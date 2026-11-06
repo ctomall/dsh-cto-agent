@@ -19,7 +19,11 @@ createServer((req, res) => {
   req.on('end', () => {
     call += 1
     const streaming = (() => { try { return JSON.parse(body).stream === true } catch { return false } })()
-    if (!streaming) { res.writeHead(400); return res.end('expected stream') }
+    // 非流式也要能答：探针/连通性检查常用一次性请求
+    if (!streaming) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }] }))
+    }
     if (call % 2 === 1) {
       sse(res, [
         { choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${call}`, function: { name: 'fs.write', arguments: '{"path":"mock-report.md",' } }] } }] },

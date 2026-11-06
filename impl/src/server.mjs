@@ -444,6 +444,31 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { audit: items, limit }))
     }
 
+    // —— 模型连通性探针：接上 key 之后，从界面上先"试一句"再跑真任务 ——
+    if (req.method === 'POST' && url.pathname === '/api/model/probe') {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      if (driver.name.startsWith('fake')) {
+        return reply(res, json(400, { ok: false, error: 'driver_is_stub', hint: '配置 MODEL_BASE_URL / MODEL_NAME / MODEL_API_KEY 后重启' }))
+      }
+      const started = Date.now()
+      try {
+        const out = await Promise.race([
+          // driver 会遍历 tools，探针也要给空数组，否则会在 undefined.map 上崩
+          driver.complete({ messages: [{ role: 'user', content: '只回四个字符：pong' }], tools: [] }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('probe_timeout')), 15_000)),
+        ])
+        return reply(res, json(200, {
+          ok: true,
+          driver: driver.name,
+          ms: Date.now() - started,
+          sample: String(out?.text ?? '').slice(0, 80),
+        }))
+      } catch (e) {
+        return reply(res, json(502, { ok: false, error: 'probe_failed', message: String(e.message ?? e), ms: Date.now() - started }))
+      }
+    }
+
     // —— 运行时设置（只读、脱敏）：告诉运维"现在到底跑着什么配置" ——
     if (req.method === 'GET' && url.pathname === '/api/settings') {
       const ctx = ctxOf(req)
