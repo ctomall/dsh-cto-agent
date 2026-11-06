@@ -77,6 +77,14 @@ add('公网证书到期', certRow, certNote)
 add('磁盘余量', availGb === null ? '未能读取' : `${availGb.toFixed(1)} GB 可用（${dfCols[4] ?? '?'} 已用）`,
   diskOk === false ? '**低于 2GB：写库/升级/备份会开始失败**' : '')
 
+// 部署目录是否干净：脏工作区会让下一次在线升级直接 dirty_worktree 失败
+const dep = process.env.DEPLOY_DIR ?? '/opt/cube-agent'
+const depStatus = run('git', ['-C', dep, 'status', '--porcelain'], { timeout: 10000 })
+const depSha = run('git', ['-C', dep, 'rev-parse', '--short', 'HEAD'], { timeout: 10000 })
+const dirty = depStatus.ok && depStatus.out.length > 0
+add('部署目录干净', dirty ? `**有本地改动（${depStatus.out.split('\n').length} 个文件）**` : `干净（${depSha.out || '?'}）`,
+  dirty ? '下次在线升级会因 dirty_worktree 失败' : '')
+
 add('重启韧性（systemd）',
   notEnabled.length === 0 ? `5 个单元均 enabled（${st.map((x) => x.ac).join('/')}）` : `**未启用**：${notEnabled.map((x) => x.u).join(', ')}`,
   notEnabled.length === 0 ? '' : '机器重启后不会自动恢复')
