@@ -173,12 +173,18 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
     maxSteps: numEnv('AGENT_MAX_STEPS', 10),
     historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
-    loadHistory: ({ tenantId, sessionId, limit }) =>
-      db
+    loadHistory: ({ tenantId, sessionId, limit }) => {
+      const cap = numEnv('AGENT_HISTORY_CHARS', 8_000)
+      return db
         .prepare('select role, content from messages where tenant_id = ? and session_id = ? order by rowid desc limit ?')
         .all(tenantId, sessionId, Number(limit))
         .reverse()
-        .map((r) => ({ role: r.role, content: r.content })),
+        .map((r) => {
+          const text = String(r.content ?? '')
+          // 单条过长会撑爆上下文窗口：截断并显式标注，避免 provider 直接 400
+          return { role: r.role, content: text.length > cap ? `${text.slice(0, cap)}…（已截断 ${text.length - cap} 字）` : text }
+        })
+    },
     toolResults: {
       get: (runId, callId) => {
         const r = db.prepare('select * from run_tool_results where run_id = ? and call_id = ?').get(runId, callId)
@@ -494,6 +500,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
           maxSteps: numEnv('AGENT_MAX_STEPS', 10),
           timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
           historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
+          historyChars: numEnv('AGENT_HISTORY_CHARS', 8_000),
         },
         startedAt,
         // 明确不返回：令牌、口令、模型密钥、DB 绝对路径
