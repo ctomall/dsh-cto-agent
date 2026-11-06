@@ -125,14 +125,15 @@ export class AgentLoop {
     }
     try {
       const out = await this.tools.run(call.name, call.args, runId)
+      // 先落幂等缓存再发事件：事件一旦被看到，重放/崩溃恢复就必须能拿到同一结果
+      this.toolResults?.put({ runId, callId, ok: 1, content: out.content, artifact: out.artifact ?? null, error: null })
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: true, truncated: false })
       if (out.artifact) this.rc.emitTo(runId, 'artifact.created', out.artifact)
       messages.push({ role: 'tool', tool_call_id: callId, content: out.content })
-      this.toolResults?.put({ runId, callId, ok: 1, content: out.content, artifact: out.artifact ?? null, error: null })
     } catch (e) {
+      this.toolResults?.put({ runId, callId, ok: 0, content: `error: ${e.message}`, artifact: null, error: String(e.message) })
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: false, error: String(e.message) })
       messages.push({ role: 'tool', tool_call_id: callId, content: `error: ${e.message}` })
-      this.toolResults?.put({ runId, callId, ok: 0, content: `error: ${e.message}`, artifact: null, error: String(e.message) })
     }
     return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
   }
