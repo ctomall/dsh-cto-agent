@@ -1,6 +1,6 @@
 // 应用层限流：滑动窗口，按 (clientIp, bucket) 计数。
 // 为什么必须在应用层做：Cloudflare 侧规则需要 API 凭据，且隧道后面的运维接口更该自己守。
-export function createRateLimiter({ clock = () => Date.now() } = {}) {
+export function createRateLimiter({ clock = () => Date.now(), maxKeys = 10_000 } = {}) {
   const buckets = new Map()
 
   return {
@@ -15,10 +15,23 @@ export function createRateLimiter({ clock = () => Date.now() } = {}) {
       }
       live.push(now)
       buckets.set(key, live)
+      // 键数量上限：伪造来源 IP 会不断产生新键，不做上限就是内存 DoS 入口
+      if (buckets.size > maxKeys) {
+        for (const [k, v] of buckets) {
+          const alive = v.some((t) => now - t < 60_000)
+          if (!alive) buckets.delete(k)
+          if (buckets.size <= maxKeys) break
+        }
+        // 仍然超限：按插入顺序淘汰最老的键
+        while (buckets.size > maxKeys) buckets.delete(buckets.keys().next().value)
+      }
       return { ok: true, remaining: limit - live.length }
     },
     reset() {
       buckets.clear()
+    },
+    get size() {
+      return buckets.size
     },
   }
 }
@@ -38,6 +51,21 @@ export function bucketFor(pathname, method) {
   return null
 }
 
-export function clientIp(req) {
-  return req.headers?.['cf-connecting-ip'] || req.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
+// 转发头只在"连接来自受信代理"时才可信：cloudflared 从回环连入；
+// 直连（非回环）时若还信 x-forwarded-for，伪造一个头就能绕过限流。
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+
+export function clientIp(req, { trustProxy = isTrustedProxy(req.socket?.remoteAddress) } = {}) {
+  if (trustProxy) {
+    const forwarded = req.headers?.['cf-connecting-ip'] || req.headers?.['x-forwarded-for']?.split(',')[0]?.trim()
+    if (forwarded) return forwarded
+  }
+  return req.socket?.remoteAddress || 'unknown'
+}
+
+export function isTrustedProxy(remote) {
+  if (!remote) return false
+  if (LOOPBACK.has(remote)) return true
+  const extra = (process.env.TRUSTED_PROXIES ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+  return extra.includes(remote)
 }

@@ -30,9 +30,12 @@ test('bucket 归类与限制值', () => {
   assert.equal(LIMITS.upgrade.limit, 3)
 })
 
-test('clientIp 优先取 Cloudflare 头', () => {
-  assert.equal(clientIp({ headers: { 'cf-connecting-ip': '1.2.3.4' } }), '1.2.3.4')
-  assert.equal(clientIp({ headers: { 'x-forwarded-for': '5.6.7.8, 9.9.9.9' } }), '5.6.7.8')
+test('clientIp：来自受信代理（回环）时优先取 Cloudflare / 转发头', () => {
+  const fromProxy = (headers) => ({ headers, socket: { remoteAddress: '127.0.0.1' } })
+  assert.equal(clientIp(fromProxy({ 'cf-connecting-ip': '1.2.3.4' })), '1.2.3.4')
+  assert.equal(clientIp(fromProxy({ 'x-forwarded-for': '5.6.7.8, 9.9.9.9' })), '5.6.7.8')
+  // 直连（非回环）时转发头不可信，必须用真实来源
+  assert.equal(clientIp({ headers: { 'cf-connecting-ip': '1.2.3.4' }, socket: { remoteAddress: '203.0.113.9' } }), '203.0.113.9')
 })
 
 test('HTTP：超过 api 上限返回 429 且带 retry-after', async (t) => {

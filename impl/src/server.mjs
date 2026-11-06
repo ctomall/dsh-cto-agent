@@ -43,20 +43,29 @@ const upgradeRoute = createUpgradeRoute({
 
 const json = (status, body) => ({ status, body })
 
-const readForm = (req) =>
-  new Promise((res) => {
+const MAX_BODY = Number(process.env.MAX_BODY_BYTES ?? 1_048_576) // 1 MiB
+class BodyTooLarge extends Error {}
+
+function collect(req) {
+  return new Promise((resolve, reject) => {
     let raw = ''
-    req.on('data', (c) => (raw += c))
-    req.on('end', () => res(Object.fromEntries(new URLSearchParams(raw))))
+    let bytes = 0
+    req.on('data', (chunk) => {
+      bytes += chunk.length
+      if (bytes > MAX_BODY) { req.destroy(); resolve(''); return }
+      raw += chunk
+    })
+    req.on('end', () => resolve(raw))
+    req.on('error', reject)
   })
+}
+
+const readForm = (req) =>
+  collect(req).then((raw) => Object.fromEntries(new URLSearchParams(raw)))
 
 const readJson = (req) =>
-  new Promise((res) => {
-    let raw = ''
-    req.on('data', (c) => (raw += c))
-    req.on('end', () => {
-      try { res(raw ? JSON.parse(raw) : {}) } catch { res({}) }
-    })
+  collect(req).then((raw) => {
+    try { return raw ? JSON.parse(raw) : {} } catch { return {} }
   })
 
 // 纯函数式路由（同步部分）：测试可直接调用，不需要端口
@@ -233,6 +242,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local')
+
+    // —— 请求体上限：先看 content-length，避免把大包读进内存 ——
+    const declared = Number(req.headers['content-length'] ?? 0)
+    if (Number.isFinite(declared) && declared > MAX_BODY) {
+      return reply(res, json(413, { error: 'payload_too_large', limit: MAX_BODY }))
+    }
 
     // —— 限流：先于一切业务逻辑，避免打穿到数据库/模型 ——
     const bucket = bucketFor(url.pathname, req.method)
