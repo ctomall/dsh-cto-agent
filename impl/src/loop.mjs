@@ -94,6 +94,8 @@ export class AgentLoop {
     }
 
     if (decision.type === 'final') {
+      const st2 = this.rc.status?.(runId)
+      if (TERMINAL.has(st2)) return { status: st2, note: 'terminal_before_final' }
       if (decision.text) {
         // 流式时增量已逐块发过，这里不再整段重复
         if (!streamed) this.rc.emitTo(runId, 'text.delta', { text: decision.text })
@@ -183,6 +185,10 @@ export class AgentLoop {
   }
 
   async executeAndContinue({ runId, messages, call, callId, steps, tenantId, sessionId }) {
+    // 终态保护：批准与取消可能同时到达。若 run 已经 canceled/failed/finished，
+    // **不再执行工具**（否则用户点了停止，文件仍被写出去，还会在终态之后冒事件）
+    const st0 = this.rc.status?.(runId)
+    if (TERMINAL.has(st0)) return { status: st0, note: 'terminal_before_tool' }
     // 幂等：同一 (runId, callId) 只真正执行一次。审批/重试/崩溃恢复都可能再次走到这里。
     const cached = this.toolResults?.get(runId, callId)
     if (cached) {
@@ -194,6 +200,9 @@ export class AgentLoop {
       const out = await this.tools.run(call.name, call.args, runId)
       // 先落幂等缓存再发事件：事件一旦被看到，重放/崩溃恢复就必须能拿到同一结果
       this.toolResults?.put({ runId, callId, ok: 1, content: out.content, artifact: out.artifact ?? null, error: null })
+      // 执行期间可能被取消：终态之后不再发事件（否则前端会在"已取消"后继续看到产物）
+      const st1 = this.rc.status?.(runId)
+      if (TERMINAL.has(st1)) return { status: st1, note: 'terminal_during_tool' }
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: true, truncated: false })
       if (out.artifact) this.rc.emitTo(runId, 'artifact.created', out.artifact)
       messages.push({ role: 'tool', tool_call_id: callId, content: out.content })
