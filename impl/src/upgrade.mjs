@@ -1,6 +1,7 @@
 // 在线一键升级：只允许 git fetch / pull --ff-only，不允许 reset --hard 或 clean。
 // 安全口径：未配置 token 时接口整体关闭（fail-closed），不是"忘配就裸奔"。
 import { execFile } from 'node:child_process'
+import { readdirSync } from 'node:fs'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
 // 常量时间比较：避免通过响应时间侧信道推断 token
@@ -44,10 +45,18 @@ const TEST_FILES = [
   'impl/test/gate.test.mjs',
 ]
 
-export function testFilesForScope(env = process.env) {
-  return String(env.UPGRADE_TEST_SCOPE ?? '').trim().toLowerCase() === 'full'
-    ? ['impl/test'] // node --test 会递归执行目录下所有测试文件
-    : TEST_FILES
+// 注意：`node --test impl/test` 在 Node 24 会把目录当成模块去 require 并报错，
+// 所以"全量"必须在运行时枚举文件，不能传目录。
+export function testFilesForScope(env = process.env, listDir = (dir) => readdirSync(dir)) {
+  if (String(env.UPGRADE_TEST_SCOPE ?? '').trim().toLowerCase() !== 'full') return TEST_FILES
+  try {
+    return listDir('impl/test')
+      .filter((f) => f.endsWith('.test.mjs'))
+      .sort()
+      .map((f) => `impl/test/${f}`)
+  } catch {
+    return TEST_FILES // 枚举失败就退回冒烟集，绝不放行一个空列表
+  }
 }
 
 function defaultExec(repoDir) {
