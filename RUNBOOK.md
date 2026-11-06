@@ -119,3 +119,10 @@ sudo ./scripts/restore-drill.sh          # 或用 SRC_DB=... 指定源库
 ```
 
 流程：备份 → 还原到临时库 → 用还原库在 8797 起独立实例 → 校验 `/healthz`、`/api/overview` 与消息行数一致。**线上服务完全不受影响。**
+
+## 部署形态（2026-11-06 起）
+
+- 服务运行在 **`/opt/cube-agent`**（GitHub 克隆），**不再直接跑开发工作区** `/home/pro/dsh/cube-agent`
+- 好处：开发目录里改文件不会瞬时上线；升级走 ff-only 拉取 `/opt` 克隆
+- 发布流程：`开发目录改 → commit → push → 调用 /api/admin/upgrade 或 /opt 里 git pull --ff-only → 自动重启`
+- 单元文件：`deploy/cube-agent.service`（`WorkingDirectory=/opt/cube-agent/impl`），实际生效副本在 `/etc/systemd/system/`
