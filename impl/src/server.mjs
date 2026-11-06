@@ -268,7 +268,9 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const form = await readForm(req)
       if (gate && !gate.checkPassword(form.password)) metrics.inc('login_failures_total')
       if (gate && gate.checkPassword(form.password)) {
-        res.writeHead(302, { location: '/', 'set-cookie': gate.cookie(), 'cache-control': 'no-store' })
+        const https = String(req.headers['x-forwarded-proto'] ?? '').toLowerCase().includes('https') ||
+          process.env.COOKIE_SECURE === '1'
+        res.writeHead(302, { location: '/', 'set-cookie': gate.cookie({ secure: https }), 'cache-control': 'no-store' })
         return res.end()
       }
       res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })

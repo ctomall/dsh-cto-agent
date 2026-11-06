@@ -65,3 +65,31 @@ test('CSRF：同源变更请求照常通过', async (t) => {
   })
   assert.equal(r.status, 201)
 })
+
+test('Cookie 安全属性：HTTPS（x-forwarded-proto）时下发 Secure', async (t) => {
+  const base = await bootGate(t)
+  const r = await fetch(`${base}/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-proto': 'https' },
+    body: 'password=pw-test',
+    redirect: 'manual',
+  })
+  const setCookie = r.headers.get('set-cookie') || ''
+  assert.match(setCookie, /HttpOnly/)
+  assert.match(setCookie, /SameSite=Lax/)
+  assert.match(setCookie, /Secure/, '拿到 https 线索时必须加 Secure')
+})
+
+test('Cookie 安全属性：纯 HTTP 时不加 Secure（本机/测试仍可用）', async (t) => {
+  const base = await bootGate(t)
+  const { status, cookie } = await login(base)
+  assert.equal(status, 302)
+  const r = await fetch(`${base}/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'password=pw-test',
+    redirect: 'manual',
+  })
+  assert.equal(!!(r.headers.get('set-cookie') || '').match(/; Secure/), false)
+  assert.match(cookie, /^cube_session=/)
+})

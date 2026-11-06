@@ -24,8 +24,9 @@ export function createGate({ password, secret } = {}) {
     checkPassword(input) {
       return safeEqual(input, password)
     },
-    cookie() {
-      return `cube_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`
+    // secure=true 时加 Secure（HTTPS 链路）：防止降级到 http 时仍被发送
+    cookie({ secure = false } = {}) {
+      return `cube_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400${secure ? '; Secure' : ''}`
     },
   }
 }
