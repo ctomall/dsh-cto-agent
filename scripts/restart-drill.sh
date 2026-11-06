@@ -49,8 +49,14 @@ pend=$(curl -s -m 15 -b "$JAR" -H "Authorization: Bearer $TOK" "$BASE/api/sessio
 printf '%s' "$pend" | grep -q "$RUN" && ok "重启后待审批仍在" "$RUN" || no "重启后待审批仍在" "$pend"
 
 dec=$(curl -s -m 30 "${H[@]}" -d '{"decision":"allow_once"}' "$BASE/api/approvals/$RUN")
-printf '%s' "$dec" | grep -q '"status":"done"' && ok "批准后完成" done || no "批准后完成" "$dec"
-sleep 1
+# v193 起审批接口是非阻塞的：立即回 {"status":"accepted"}，恢复在后台继续。
+# 所以这里只断言"被接受"，真正的完成用下面轮询 + 事件统计来判（旧脚本曾断言 done，重构后误报红灯）。
+printf '%s' "$dec" | grep -qE '"status":"(accepted|done)"' && ok "审批被接受" "$(printf '%s' "$dec" | head -c 40)" || no "审批被接受" "$dec"
+for i in $(seq 1 30); do
+  st=$(curl -s -m 10 -b "$JAR" -H "Authorization: Bearer $TOK" "$BASE/api/runs" 2>/dev/null | grep -o "\"$RUN\"[^}]*" | head -1)
+  case "$st" in *'"done"'*) break ;; esac
+  sleep 1
+done
 
 # 直接用 node 统计，避免额外依赖
 stats=$(node -e '
