@@ -46,3 +46,20 @@ test('目标已存在时拒绝覆盖', async (t) => {
   backupDb({ dbPath, outDir: join(dir, 'bak'), now: fixed })
   assert.throws(() => backupDb({ dbPath, outDir: join(dir, 'bak'), now: fixed }), /拒绝覆盖/)
 })
+
+test('备份保留策略：只留最近 N 份', async (t) => {
+  const { backupDb } = await import('../src/backup.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'cube-retention-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const dbPath = join(dir, 'cube.db')
+  const db = openDb(dbPath); seedTwoTenants(db); db.close()
+  const outDir = join(dir, 'bak')
+
+  for (let i = 0; i < 4; i++) {
+    backupDb({ dbPath, outDir, keep: 2, now: new Date(Date.UTC(2026, 0, 1, 0, 0, i)) })
+  }
+  const left = (await import('node:fs')).readdirSync(outDir).filter((f) => f.endsWith('.db'))
+  assert.equal(left.length, 2, `应只保留 2 份，实际 ${left.length}`)
+  assert.ok(left.sort()[0].includes('000002'), '保留的应是较新的两份')
+})

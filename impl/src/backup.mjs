@@ -1,7 +1,7 @@
 // 在线备份：SQLite `VACUUM INTO`（WAL 下安全，产出单文件），并逐表核对行数。
 // 用途：自托管部署在升级/迁移前留一份可恢复快照。
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, existsSync, statSync } from 'node:fs'
+import { mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const KEY_TABLES = [
@@ -22,7 +22,19 @@ export function countTables(dbPath, tables = KEY_TABLES) {
   }
 }
 
-export function backupDb({ dbPath, outDir, now = new Date() } = {}) {
+// 只保留最近 keep 份 cube-*.db，避免备份目录无限增长
+export function pruneBackups(outDir, keep = 14) {
+  if (!existsSync(outDir)) return []
+  const files = readdirSync(outDir)
+    .filter((f) => /^cube-\d{8}-\d{6}\.db$/.test(f))
+    .sort()
+    .reverse()
+  const removed = files.slice(keep)
+  for (const f of removed) unlinkSync(join(outDir, f))
+  return removed
+}
+
+export function backupDb({ dbPath, outDir, now = new Date(), keep = 14 } = {}) {
   if (!dbPath || !existsSync(dbPath)) throw new Error(`数据库不存在: ${dbPath}`)
   mkdirSync(outDir, { recursive: true })
   const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-')
@@ -39,7 +51,9 @@ export function backupDb({ dbPath, outDir, now = new Date() } = {}) {
   const source = countTables(dbPath)
   const copy = countTables(outPath)
   const mismatch = Object.keys(source).filter((t) => source[t] !== copy[t])
+  const pruned = pruneBackups(outDir, keep)
   return {
+    pruned,
     outPath,
     bytes: statSync(outPath).size,
     counts: copy,
