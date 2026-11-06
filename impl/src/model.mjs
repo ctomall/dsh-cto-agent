@@ -75,6 +75,7 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
           const decoder = new TextDecoder()
           let buf = ''
           let text = ''
+          let reasoningChars = 0
           const calls = []
           let usage = null
           let finishReason = null
@@ -98,6 +99,9 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
                 text += delta.content
                 onDelta(delta.content)
               }
+              // 推理型端点字段名不统一：只计数，绝不拼进正文
+              const reasoning = delta.reasoning_content ?? delta.reasoning ?? delta.thinking
+              if (typeof reasoning === 'string') reasoningChars += reasoning.length
               for (const tc of delta.tool_calls ?? []) {
                 const i = tc.index ?? 0
                 calls[i] ??= { id: tc.id ?? `call_${i}`, name: '', arguments: '' }
@@ -115,7 +119,7 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
             const others = calls.filter((c, i) => c && c !== first).map((c) => ({ id: c.id, name: c.name }))
             return { type: 'tool_call', call: { id: first.id, name: first.name, args }, others, usage, finishReason }
           }
-          return { type: 'final', text, usage, finishReason }
+          return { type: 'final', text, usage, finishReason, ...(reasoningChars ? { reasoningChars } : {}) }
         }
 
         const j = await res.json()
@@ -129,7 +133,14 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
           const id = tc.id ?? 'call_0'
           return { type: 'tool_call', call: { id, name: tc.function.name, args }, others, usage: j.usage ?? null, finishReason: j.choices?.[0]?.finish_reason ?? null }
         }
-        return { type: 'final', text: msg.content ?? '', usage: j.usage ?? null, finishReason: j.choices?.[0]?.finish_reason ?? null }
+        const jr = msg.reasoning_content ?? msg.reasoning ?? msg.thinking
+        return {
+          type: 'final',
+          text: msg.content ?? '',
+          usage: j.usage ?? null,
+          finishReason: j.choices?.[0]?.finish_reason ?? null,
+          ...(typeof jr === 'string' && jr ? { reasoningChars: jr.length } : {}),
+        }
       } finally {
         clearTimeout(timer)
       }

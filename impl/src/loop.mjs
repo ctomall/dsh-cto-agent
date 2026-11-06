@@ -42,6 +42,7 @@ export class AgentLoop {
   }
 
   async start({ runId, tenantId = null, sessionId = null, input }) {
+    this.reasoningTotal = 0
     this.rc.create(runId, { tenantId, sessionId, driver: this.driver?.name ?? null })
     this.rc.transition(runId, 'running')
     this.rc.emitTo(runId, 'text.delta', { text: `收到目标：${input}` })
@@ -110,6 +111,8 @@ export class AgentLoop {
         ok: true,
         // 模型最终文本长度（不含"收到目标"回显）：前端据此判断"这次有没有正文"
         textChars: String(decision.text ?? '').length,
+        // 只输出思考时用于区分"思考了但没答案"与"什么都没输出"
+        ...(this.reasoningTotal ? { reasoningChars: this.reasoningTotal } : {}),
         ...(truncated ? { truncated: true } : {}),
         ...(this.usage ? { usage: this.usage } : {}),
       })
