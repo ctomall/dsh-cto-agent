@@ -26,7 +26,16 @@ if [ -n "$PW" ]; then
 fi
 
 echo "== 1) 模型必须是真实的（桩驱动直接拒绝）"
-st=$(curl -s -m 10 -b "$JAR" -H "Authorization: Bearer $TOK_A" "$BASE/api/model/status")
+# 公网链路会丢包（000）也会在重启窗口给 502-504：先重试，再下结论
+st=""; sc=000
+for i in 1 2 3 4 5; do
+  sc=$(curl -s -o /tmp/frr-status.json -w '%{http_code}' -m 15 -b "$JAR" -H "Authorization: Bearer $TOK_A" "$BASE/api/model/status")
+  st=$(cat /tmp/frr-status.json 2>/dev/null)
+  case "$sc" in 200) break ;; 000|502|503|504) sleep 2 ;; *) break ;; esac
+done
+if [ "$sc" != 200 ]; then
+  no "模型状态" "HTTP $sc（多次重试后仍失败）：$(echo "$st" | head -c 120)"
+fi
 echo "$st" | grep -q '"real":true' || no "模型状态" "driver 非真实：$st（先 scripts/unblock.sh --model-key …）"
 ok "模型状态" "$(echo "$st" | head -c 80)"
 
