@@ -81,7 +81,23 @@
 
 公网实测（同一时刻）：无 Cookie → `302 / 401`；带伪造 CF 头 → 仍 `302 / 401`。
 
-## 鉴权优先级（2026-11-06）
+## 鉴权优先级（2026-11-06，2026-11-07 修正）
+
+**先看门，再看身份**——两层，顺序不能搞反：
+
+1. **口令门（`APP_PASSWORD`）**：只看 `cube_session` Cookie。开启后，除 `/login`、`/api/version`、`/healthz`
+   之外的所有路径**没有 Cookie 就 401（API）/ 302（页面）**。
+   因此 **`Authorization: Bearer <token>` 不能单独过门**——token 用来确定租户，不是用来开门的。
+2. **租户身份**：过了门之后，若请求带 `Authorization`，以 Bearer 为准；
+   Bearer 无效即 401，**不回退**到 Cookie。
+
+**给集成方的结论**：在口令门开启的部署里，脚本必须"先登录拿 Cookie"，再（可选）带 Bearer。
+只用 Bearer 的做法只适用于未配 `APP_PASSWORD` 的实例。
+
+已用用例钉住：Bearer-only → 401、Cookie-only → 200、Cookie+坏 Bearer → 401。
+
+### 历史记录（保留）
+
 
 - 请求若带 `Authorization: Bearer <token>`，**只按 bearer 鉴权**；bearer 无效即 **401**，
   **不会回退**到 Cookie。理由：显式凭据失败必须报错，静默回退会掩盖客户端的配置错误。
