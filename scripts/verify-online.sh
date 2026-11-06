@@ -10,11 +10,13 @@ ok() { printf '  ✔ %-42s %s\n' "$1" "$2"; pass=$((pass+1)); }
 no() { printf '  ✖ %-42s %s\n' "$1" "$2"; fail=$((fail+1)); }
 # 链路不通 != 产品有问题：如实记 SKIP，别把它算成失败（否则公网红灯没有信息量）
 sk() { printf '  ○ %-42s %s\n' "$1" "$2"; skip=$((skip+1)); }
+# 单次请求超时：公网到本机应该是毫秒级；25s 一次会让整轮检查跑到十分钟
+CURL_MAX="${CURL_MAX:-8}"
 code() {
   # 公网入口有损（实测约 1/3 失败）：000 必须多试几次，否则"网络抖动"会被误报成"鉴权错了"
   local c i
-  for i in 1 2 3 4; do
-    c=$(curl -s -o /dev/null -w '%{http_code}' -m 25 "$@") || c="000"
+  for i in 1 2 3; do
+    c=$(curl -s -o /dev/null -w '%{http_code}' -m "$CURL_MAX" "$@") || c="000"
     [ "$c" != "000" ] && { printf '%s' "$c"; return; }
     sleep 2
   done
@@ -60,7 +62,7 @@ if [ -n "${PW:-}" ]; then
     # 同样的有损链路问题：JSON 断言也要重试，否则一次超时会被当成"接口坏了"
     ms=""
     for i in 1 2 3 4; do
-      ms=$(curl -s -b "$jar" -H "Authorization: Bearer $T_A" -m 15 "$BASE/api/model/status")
+      ms=$(curl -s -b "$jar" -H "Authorization: Bearer $T_A" -m "$CURL_MAX" "$BASE/api/model/status")
       echo "$ms" | grep -q '"driver"' && break
       sleep 2
     done
