@@ -17,7 +17,7 @@
 ✔ secret-scan        pass=6 fail=0
 ✔ a11y-contrast      全部达标
 ✔ ratelimit-check    pass=4 fail=0
-○ acceptance         pass=18 fail=0 skip=2（有 SKIP）
+○ acceptance         pass=19 fail=0 skip=2（有 SKIP）
 == 结论：pass=4 fail=0 skip=1 → 目标未完成
 ```
 
@@ -72,6 +72,8 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 ```
 
 ## 运维能力（支撑「可上线」）
+
+验收含「部署目录干净」一项：`/opt/cube-agent` 克隆必须无未提交改动，且 HEAD 与线上一致（防热改线上）。
 
 | 能力 | 命令 |
 |---|---|

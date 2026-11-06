@@ -44,6 +44,21 @@ if [ -z "$local_sha" ]; then sk "版本一致性" "非 git 目录"
 elif [ "$remote_sha" = "$local_sha" ]; then ok "版本一致性" "$remote_sha"
 else no "版本一致性" "线上=$remote_sha 本地=$local_sha（需重启/升级）"; fi
 
+# 部署目录完整性：线上跑的是 git 克隆时，克隆必须干净且 HEAD 与线上一致
+DEPLOY_DIR="${DEPLOY_DIR:-/opt/cube-agent}"
+if [ -d "$DEPLOY_DIR/.git" ]; then
+  served=$(printf '%s' "$remote_sha")
+  deploy_head=$(git -C "$DEPLOY_DIR" rev-parse --short HEAD 2>/dev/null)
+  dirty=$(git -C "$DEPLOY_DIR" status --porcelain 2>/dev/null | head -5)
+  if [ -n "$dirty" ]; then
+    no "部署目录干净" "有未提交改动（热改线上？）：$(printf '%s' "$dirty" | tr '\n' ' ')"
+  elif [ -n "$deploy_head" ] && [ "$deploy_head" != "$served" ]; then
+    no "部署目录干净" "克隆 HEAD=$deploy_head 与线上=$served 不一致（可能改了没重启）"
+  else
+    ok "部署目录干净" "$DEPLOY_DIR @ $deploy_head"
+  fi
+fi
+
 echo "== ① 真实模型 loop"
 ms=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 20 "$BASE/api/model/status" 2>/dev/null)
 if echo "$ms" | grep -q '"real":true'; then
