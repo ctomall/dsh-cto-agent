@@ -70,6 +70,12 @@ async function main() {
   const note = document.createElement('p')
   note.className = 'muted'
   note.textContent = '这里不展示令牌、口令、模型密钥与数据库绝对路径。'
+  if (body.lastProbe) {
+    const lp = body.lastProbe
+    out.textContent = lp.ok
+      ? `上次：✔ ${lp.driver} · ${lp.ms}ms（${new Date(lp.at).toLocaleTimeString()}）`
+      : `上次：✖ ${lp.error ?? lp.message ?? '失败'}（${new Date(lp.at).toLocaleTimeString()}）`
+  }
   list.append(probeRow, note)
 }
 main()

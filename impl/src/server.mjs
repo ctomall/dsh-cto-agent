@@ -161,6 +161,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   }
   if (gate) console.log('[cube-agent] 身份门：已开启（APP_PASSWORD）')
   const grants = createGrants(db)
+  // 最近一次连通性探针结果：进程内保存，重启即失效（不做长期沉淀）
+  let lastProbe = null
   // 真实模型常需要更多步数/更长超时：做成运维旋钮，而不是改代码
   const numEnv = (k, d) => {
     const v = Number(process.env[k])
@@ -496,6 +498,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       if (driver.name.startsWith('fake')) {
+        lastProbe = { ok: false, error: 'driver_is_stub', at: new Date().toISOString(), ms: 0 }
         return reply(res, json(400, { ok: false, error: 'driver_is_stub', hint: '配置 MODEL_BASE_URL / MODEL_NAME / MODEL_API_KEY 后重启' }))
       }
       const started = Date.now()
@@ -505,14 +508,11 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
           driver.complete({ messages: [{ role: 'user', content: '只回四个字符：pong' }], tools: [] }),
           new Promise((_, rej) => setTimeout(() => rej(new Error('probe_timeout')), 15_000)),
         ])
-        return reply(res, json(200, {
-          ok: true,
-          driver: driver.name,
-          ms: Date.now() - started,
-          sample: String(out?.text ?? '').slice(0, 80),
-        }))
+        lastProbe = { ok: true, driver: driver.name, ms: Date.now() - started, sample: String(out?.text ?? '').slice(0, 80), at: new Date().toISOString() }
+        return reply(res, json(200, lastProbe))
       } catch (e) {
-        return reply(res, json(502, { ok: false, error: 'probe_failed', message: String(e.message ?? e), ms: Date.now() - started }))
+        lastProbe = { ok: false, error: 'probe_failed', message: String(e.message ?? e), ms: Date.now() - started, at: new Date().toISOString() }
+        return reply(res, json(502, lastProbe))
       }
     }
 
@@ -530,6 +530,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         maxBodyBytes: MAX_BODY,
         retentionDays: Number.isFinite(keepDays) ? keepDays : null,
         upgrade: { testGate: process.env.UPGRADE_RUN_TESTS === '1', exitAfter: process.env.UPGRADE_EXIT_AFTER === '1' },
+        lastProbe,
         agent: {
           maxSteps: numEnv('AGENT_MAX_STEPS', 10),
           timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
