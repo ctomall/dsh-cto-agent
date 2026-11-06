@@ -1,0 +1,8 @@
+[Unit]
+Description=Cube Agent 数据维护（清理过期事件 + 报告体积）
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/node /opt/cube-agent/scripts/maintenance.mjs --prune-events 90
+ExecStartPost=/usr/bin/node /opt/cube-agent/scripts/maintenance.mjs --report
+User=root

@@ -306,3 +306,19 @@ for i in 1 2 3 4; do (node --test --test-concurrency=2 --test-timeout=30000 impl
 ```
 
 **不碰线上**：全程在临时目录 + 独立端口；最后一项是负向验证（损坏的备份必须被认出来）。
+
+## 定时任务（systemd，unit 已入库到 deploy/）
+
+| 单元 | 频率 | 作用 |
+|---|---|---|
+| `cube-agent-backup.timer` | 每日 03:30 | `backup.mjs`（VACUUM INTO + 逐表校验，保留 14 份） |
+| `cube-agent-restore-drill.timer` | 每月 | `restore-drill.sh`（还原到临时库并起实例验证） |
+| `cube-agent-maintenance.timer` | 每月 1 日 04:10 | `maintenance.mjs --prune-events 90` + `--report` |
+
+```bash
+sudo cp deploy/cube-agent-*.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload
+sudo systemctl enable --now cube-agent-backup.timer cube-agent-restore-drill.timer cube-agent-maintenance.timer
+```
+
+**实测（2026-11-07）**：手动 start `cube-agent-maintenance.service` → 两个 Exec 均 `status=0/SUCCESS`，
+`--report` 输出现状（runs 994 / events 7365 / audit 1007）；因库龄不足 90 天，本次删除 0 行（符合预期）。

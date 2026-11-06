@@ -1,0 +1,10 @@
+[Unit]
+Description=每月 1 日 04:10 清理过期事件（保留 90 天）
+
+[Timer]
+OnCalendar=*-*-01 04:10
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
