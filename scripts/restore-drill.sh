@@ -2,10 +2,19 @@
 # 恢复演练：把备份还原到临时库，用独立实例起一遍，验证数据可用——不碰线上。
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-PORT="${1:-8797}"
+PORT=8797
 FROM_LATEST=0
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/cube-agent}"
-for a in "$@"; do [ "$a" = "--from-latest" ] && FROM_LATEST=1; done
+# 参数解析：第一个非 flag 参数才是端口。
+# （此前直接把 $1 当端口，于是 `restore-drill.sh --from-latest` 会把 "--from-latest" 当端口，
+#   node 直接 validatePort 报错——最贴近真实灾难的那种模式反而跑不起来）
+for a in "$@"; do
+  case "$a" in
+    --from-latest) FROM_LATEST=1 ;;
+    ''|*[!0-9]*) : ;;                  # 非数字（其它 flag）忽略
+    *) PORT="$a" ;;
+  esac
+done
 SRC_DB="${SRC_DB:-/var/lib/cube-agent/cube.db}"
 WORK=$(mktemp -d); LOG="$WORK/app.log"
 cleanup(){ [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null; rm -rf "$WORK"; }
