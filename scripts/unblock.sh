@@ -9,7 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 ENV_FILE=/etc/cube-agent/env
 KEY_FILE=/etc/cube-agent/model.key
-BASE_URL=""; MODEL=""; PROBE=0; CHECK=0; VERIFY=0
+BASE_URL=""; MODEL=""; PROBE=0; CHECK=0; VERIFY=0; PLAN=0; BASE="http://127.0.0.1:8787"
 MODEL_KEY=""; CF_TOKEN=""; CF_ACCOUNT=""; CF_ZONE=""; EMAILS=""
 
 while [ $# -gt 0 ]; do
@@ -20,6 +20,8 @@ while [ $# -gt 0 ]; do
     --model) MODEL="$2"; shift ;;
     --probe) PROBE=1 ;;
     --verify) VERIFY=1 ;;
+    --base) BASE="$2"; shift ;;
+    --plan) PLAN=1 ;;
     --cf-token) CF_TOKEN="$2"; shift ;;
     --cf-account) CF_ACCOUNT="$2"; shift ;;
     --cf-zone) CF_ZONE="$2"; shift ;;
@@ -38,7 +40,8 @@ status() {
   if have_cf; then echo "  ③ Cloudflare：已配置"; else echo "  ③ Cloudflare：缺失（需要 CLOUDFLARE_API_TOKEN / CF_ACCOUNT_ID / CF_ZONE_ID）"; fi
   echo
   echo "== 复验命令（--check 不跑，避免占用登录限流）"
-  echo "   ./scripts/acceptance.sh http://127.0.0.1:8787"
+  echo "   ./scripts/acceptance.sh $BASE"
+  echo "   （换入口：scripts/unblock.sh --check --base https://cto.ila3.top）"
   echo "   接入 key 后想一次跑通端到端：scripts/unblock.sh --model-key <k> --verify"
 }
 
@@ -50,6 +53,17 @@ if [ "$CHECK" = 1 ] || { [ -z "$MODEL_KEY" ] && [ -z "$CF_TOKEN" ]; }; then
   echo "  scripts/unblock.sh --model-key sk-xxx [--base-url https://api.deepseek.com/v1] [--model deepseek-chat] [--probe]"
   echo "  scripts/unblock.sh --cf-token t --cf-account a --cf-zone z --allow-emails me@x.com"
   exit 2
+fi
+
+if [ -n "$MODEL_KEY" ] && [ "$PLAN" = 1 ]; then
+  echo "== --plan（不执行）：接入真实模型的步骤"
+  echo "  1) 写入 $KEY_FILE（0600）与 $ENV_FILE 中的 MODEL_BASE_URL / MODEL_NAME / MODEL_API_KEY_FILE"
+  echo "  2) sudo systemctl restart cube-agent.service"
+  echo "  3) 等待 $BASE/healthz 200"
+  echo "  4) node scripts/model-doctor.mjs [--probe]"
+  echo "  5) scripts/first-real-run.sh $BASE          # 目标→工具→审批→产出（含驱动归属断言）"
+  echo "  6) ./scripts/acceptance.sh --require-all $BASE"
+  exit 0
 fi
 
 if [ -n "$MODEL_KEY" ]; then
@@ -66,12 +80,12 @@ if [ -n "$MODEL_KEY" ]; then
   printf 'MODEL_BASE_URL=%s\nMODEL_NAME=%s\nMODEL_API_KEY_FILE=%s\n' "$BASE_URL" "$MODEL" "$KEY_FILE" | sudo tee -a "$ENV_FILE" >/dev/null
   echo "== 已写入 $KEY_FILE（0600）与 $ENV_FILE"
   sudo systemctl restart cube-agent.service
-  for i in $(seq 1 30); do sleep 1; curl -s -o /dev/null -m 3 http://127.0.0.1:8787/healthz && break; done
+  for i in $(seq 1 30); do sleep 1; curl -s -o /dev/null -m 3 "$BASE/healthz" && break; done
   echo "== model/status:"; node scripts/model-doctor.mjs || true
   if [ "$PROBE" = 1 ]; then echo "== 真实探测（会消耗一次调用）"; node scripts/model-doctor.mjs --probe || exit 3; fi
   if [ "$VERIFY" = 1 ]; then
     echo "== 端到端：目标 → 模型选工具 → 审批 → 产出"
-    scripts/first-real-run.sh http://127.0.0.1:8787 || { echo "FAIL: 端到端未通过（看上面哪一步红的）" >&2; exit 5; }
+    scripts/first-real-run.sh "$BASE" || { echo "FAIL: 端到端未通过（看上面哪一步红的）" >&2; exit 5; }
   fi
 fi
 
@@ -88,4 +102,4 @@ fi
 
 echo
 echo "== 解除后复验"
-./scripts/acceptance.sh --require-all http://127.0.0.1:8787
+./scripts/acceptance.sh --require-all "$BASE"
