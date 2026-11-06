@@ -336,6 +336,25 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { ok: true, driver: driver.name }))
     }
 
+    // —— 会话内活动 run：刷新/新开标签页后仍能接上进行中的执行 ——
+    const ar = /^\/api\/sessions\/([^/]+)\/active$/.exec(url.pathname)
+    if (req.method === 'GET' && ar) {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const sessionId = decodeURIComponent(ar[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      const rows = db
+        .prepare("select id, status from runs where tenant_id = ? and session_id = ? and status in ('running','waiting_approval') order by started_at")
+        .all(ctx.tenantId, sessionId)
+      const active = rows.map((r) => ({
+        runId: r.id,
+        status: r.status,
+        lastSeq: Number(db.prepare('select coalesce(max(seq), 0) s from events where run_id = ?').get(r.id).s),
+      }))
+      return reply(res, json(200, { active }))
+    }
+
     // —— 会话产物列表：刷新后产物不能凭空消失（文件还在磁盘上）——
     const al = /^\/api\/sessions\/([^/]+)\/artifacts$/.exec(url.pathname)
     if (req.method === 'GET' && al) {

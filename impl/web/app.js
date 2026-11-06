@@ -299,6 +299,18 @@ async function loadGrants() {
   for (const g of list) box.append(el('div', 'grant-item', `${label(g.tool)} · 本会话`))
 }
 
+// 刷新/新开标签页时接上进行中的 run：从最后 seq 订阅，只收后续进展
+async function loadActive() {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/active`)
+  if (status !== 200 || !body.active?.length) return
+  for (const a of body.active) {
+    if (a.status === 'waiting_approval') continue // 交给 loadPending 渲染审批卡
+    state.runId = a.runId
+    setStatus('执行中（已续接）', 'running')
+    subscribe(a.runId, { lastEventId: a.lastSeq })
+  }
+}
+
 async function loadPending() {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/pending`)
   if (status !== 200 || !body.pending?.length) return
@@ -397,6 +409,7 @@ async function boot() {
 
   await loadHistory()
   await loadPending()
+  await loadActive()
   await loadGrants()
   await loadArtifacts()
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
