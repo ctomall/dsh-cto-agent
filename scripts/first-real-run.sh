@@ -45,6 +45,18 @@ RID=$(curl -s -m 20 -b "$JAR" -H "Authorization: Bearer $TOK_A" -H 'content-type
   -d "{\"input\":\"$GOAL\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | sed -n 's/.*"runId":"\([^"]*\)".*/\1/p')
 [ -n "$RID" ] && ok "创建 run" "$RID" || no "创建 run" "无 runId"
 
+echo "== 2.5) 这次 run 必须由真实驱动产生（看它自己的 run.started，而不是看配置）"
+for i in $(seq 1 20); do
+  ev0=$(curl -s -m 15 -b "$JAR" -H "Authorization: Bearer $TOK_A" "$BASE/api/runs/$RID/events?replay=1")
+  echo "$ev0" | grep -q 'event: run\.started' && break
+  sleep 0.5
+done
+if echo "$ev0" | grep -q '"real":true'; then
+  ok "驱动归属" "$(echo "$ev0" | grep -o '{"runId":"[^}]*}' | head -1 | head -c 90)"
+else
+  no "驱动归属" "run.started 未标 real:true：$(echo "$ev0" | grep -o '{"runId":"[^}]*}' | head -1 | head -c 90)"
+fi
+
 echo "== 3) 等审批（最多 120s）"
 for i in $(seq 1 120); do
   evs=$(curl -s -m 15 -b "$JAR" -H "Authorization: Bearer $TOK_A" "$BASE/api/runs/$RID/events?replay=1")
