@@ -63,3 +63,20 @@ test('备份保留策略：只留最近 N 份', async (t) => {
   assert.equal(left.length, 2, `应只保留 2 份，实际 ${left.length}`)
   assert.ok(left.sort()[0].includes('000002'), '保留的应是较新的两份')
 })
+
+test('备份文件权限 0600（库里是全租户数据）', { skip: process.platform === 'win32' }, async (t) => {
+  const { statSync } = await import('node:fs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { backupDb } = await import('../src/backup.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'bakperm-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const dbPath = join(dir, 'cube.db')
+  const db = openDb(dbPath); seedTwoTenants(db); db.close()
+  const r = backupDb({ dbPath, outDir: join(dir, 'out'), now: new Date() })
+  assert.ok(r.outPath, '应产出备份文件')
+  const mode = statSync(r.outPath).mode & 0o777
+  assert.equal(mode, 0o600, `备份权限应为 600，实际 ${mode.toString(8)}`)
+})

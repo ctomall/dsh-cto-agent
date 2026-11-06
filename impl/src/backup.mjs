@@ -1,7 +1,7 @@
 // 在线备份：SQLite `VACUUM INTO`（WAL 下安全，产出单文件），并逐表核对行数。
 // 用途：自托管部署在升级/迁移前留一份可恢复快照。
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from 'node:fs'
+import { mkdirSync, existsSync, statSync, readdirSync, unlinkSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const KEY_TABLES = [
@@ -51,6 +51,8 @@ export function backupDb({ dbPath, outDir, now = new Date(), keep = 14 } = {}) {
   }
 
   const source = countTables(dbPath)
+  // 备份含全租户数据：默认 umask 给 644，必须收紧到 600
+  try { chmodSync(outPath, 0o600) } catch {}
   const copy = countTables(outPath)
   const mismatch = Object.keys(source).filter((t) => source[t] !== copy[t])
   const pruned = pruneBackups(outDir, keep)
