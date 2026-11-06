@@ -53,7 +53,7 @@ p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
 old='this.grants?.has({ tenantId, sessionId, tool: call.name })'
 assert s.count(old)==1
 io.open(p,'w',encoding='utf-8').write(s.replace(old,'false',1))
-" impl/test/grants-isolation.test.mjs
+" impl/test/grants-isolation.test.mjs impl/test/session-grant-skips-approval-card.test.mjs
 
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
