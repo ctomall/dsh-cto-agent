@@ -71,6 +71,14 @@ function defaultExec(repoDir) {
     })
 }
 
+// 门禁失败时从测试输出里抽出"到底哪条挂了"：错误信息里只有文件列表，运维看不出根因。
+export function summarizeTestFailure(output, limit = 400) {
+  const lines = String(output ?? '').split('\n').map((l) => l.trim())
+  const picked = lines.filter((l) => /^✖/.test(l) || /^not ok \d+/.test(l) || /AssertionError/.test(l) || /^ℹ fail [1-9]/.test(l))
+  const text = [...new Set(picked)].join(' | ')
+  return text ? text.slice(0, limit) : String(output ?? '').trim().slice(0, limit)
+}
+
 export function testTimeoutMs(env = process.env) {
   const v = Number(env.UPGRADE_TEST_TIMEOUT_MS)
   return Number.isFinite(v) && v >= 10_000 ? Math.trunc(v) : 180_000
@@ -87,7 +95,8 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
           if (err) {
             // 超时和"测试真失败"必须区分：前者是门禁自身的边界，后者是代码问题
             const timedOut = err.killed === true || err.signal === 'SIGTERM'
-            const detail = (stderr || err.message).trim().slice(0, 400)
+            const raw = `${stdout ?? ''}\n${stderr ?? ''}`.trim() || err.message
+            const detail = summarizeTestFailure(raw)
             reject(new Error(timedOut ? `tests_gate_timeout(${timeout}ms): ${detail}` : detail))
             return
           }
