@@ -1,5 +1,25 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 import { TERMINAL } from './runs.mjs'
+
+// 审批事件里只放"给人看的摘要"：真实模型可能一次写几十 KB，
+// 整段塞进事件会同时污染数据库、事件流和审批卡（执行用的仍是内存里的完整参数）。
+function trimArgsForEvent(args, limit = 512) {
+  let truncated = false
+  const walk = (v) => {
+    if (typeof v === 'string') {
+      if (v.length > limit) { truncated = true; return `${v.slice(0, limit)}…（共 ${v.length} 字，已截断）` }
+      return v
+    }
+    if (Array.isArray(v)) return v.map(walk)
+    if (v && typeof v === 'object') {
+      const out = {}
+      for (const [k, val] of Object.entries(v)) out[k] = walk(val)
+      return out
+    }
+    return v
+  }
+  return { args: walk(args), truncated }
+}
 export class AgentLoop {
   constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null, toolResults = null, onUsage = null }) {
     this.rc = rc
@@ -142,12 +162,14 @@ export class AgentLoop {
       // 落库：进程重启后仍能恢复这次审批（内存态不可跨进程）
       this.pendingStore?.save({ runId, ...snapshot })
       this.rc.transition(runId, 'waiting_approval')
+      const trimmed = trimArgsForEvent(call.args)
       this.rc.emitTo(runId, 'approval.requested', {
         callId,
         action: call.name,
         target: resolveTarget(call),
         impact: '写入会话工作区文件（可撤销：删除该文件）',
-        args: call.args,
+        args: trimmed.args,
+        ...(trimmed.truncated ? { argsTruncated: true } : {}),
       })
       return { status: 'waiting_approval' }
     }
