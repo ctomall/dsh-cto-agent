@@ -268,6 +268,13 @@ kbd {
 }
 .statusbar .spacer { flex: 1; }
 
+
+/* 键盘焦点环：只在键盘导航时出现，保证可见且与配色一致 */
+:where(a, button, summary, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--blue600);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1023px) {
   .frame { --rail-w: 56px; }
   .nav-item .badge { display: none; } /* 56px 轨道放不下徽标，隐藏免得压住图标 */

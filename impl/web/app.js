@@ -79,7 +79,17 @@ function toolCard({ tool, callId }) {
   const pre = el('pre', null, '—')
   body.append(pre)
   card.append(head, body)
-  head.addEventListener('click', () => card.classList.toggle('open'))
+  const toggle = () => {
+    const open = card.classList.toggle('open')
+    head.setAttribute('aria-expanded', String(open))
+  }
+  head.tabIndex = 0
+  head.setAttribute('role', 'button')
+  head.setAttribute('aria-expanded', 'false')
+  head.addEventListener('click', toggle)
+  head.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
+  })
   state.toolCards.set(callId, { card, status })
   streamInner().append(card)
   return card
@@ -300,12 +310,18 @@ async function boot() {
   ul.textContent = ''
   for (const s of body.sessions || []) {
     const li = el('li', s.id === state.sessionId ? 'active' : '', s.title)
-    // 点会话即切换（?sid= 保留；有声明的 token 时一并带上）
-    li.addEventListener('click', () => {
+    const openSession = () => {
       const u = new URL(location.href)
       u.searchParams.set('sid', s.id)
       if (!token) u.searchParams.delete('token')
       location.href = u.toString()
+    }
+    // 键盘可达：li 不是天然可聚焦元素，必须显式给 tabindex/role，并处理 Enter/Space
+    li.tabIndex = 0
+    li.setAttribute('role', 'button')
+    li.addEventListener('click', openSession)
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSession() }
     })
     ul.append(li)
   }

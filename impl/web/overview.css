@@ -232,6 +232,13 @@ h1, h2 { margin: 0; }
 .statusbar .spacer { flex: 1; }
 
 /* 窄屏：侧栏收起、面板改浮层（DSH 在 <1024 自动收起侧栏） */
+
+/* 键盘焦点环：只在键盘导航时出现，保证可见且与配色一致 */
+:where(a, button, summary, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--blue600);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1023px) {
   .frame { --rail-w: 56px; }
   .nav-item .badge { display: none; } /* 56px 轨道放不下徽标，隐藏免得压住图标 */
