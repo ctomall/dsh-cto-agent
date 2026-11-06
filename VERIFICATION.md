@@ -109,9 +109,9 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 全量测试 | `node --test impl/test/*.test.mjs` | **175 / 175** |
+| 全量测试 | `node --test --test-concurrency=6 impl/test/*.test.mjs` | **282 / 282** |
 | 目标验收 | `./scripts/acceptance.sh http://127.0.0.1:8787` | pass=22 fail=0 skip=2 |
-| 一键复核 | `./scripts/verify-all.sh` | pass=6 fail=0 skip=1 |
+| 一键复核 | `./scripts/verify-all.sh` | pass=7 fail=0 skip=1（exit=3：仍有 SKIP） |
 | 恢复演练（最新备份） | `./scripts/restore-drill.sh 8797 --from-latest` | pass=7 fail=0 |
 | 孤儿 run 收敛 | `./scripts/orphan-drill.sh 8798` | pass=7 fail=0 |
 | 重启韧性（SIGKILL） | `sudo ./scripts/restart-drill.sh … --sigkill` | pass=9 fail=0 |

@@ -86,6 +86,13 @@ if [ -n "${mark:-}" ]; then
       [ "$n" = "$mark" ] || stale="$stale $f:$n"
     done
   done
+  # 形如 "**282 / 282**" 的写法也要与标记一致（"N 通过" 覆盖不到它）
+  for f in README.md RUNBOOK.md HANDOFF.md VERIFICATION.md; do
+    [ -f "$f" ] || continue
+    for n in $(grep -oE '\*\*[0-9]+ / [0-9]+\*\*' "$f" 2>/dev/null | grep -oE '[0-9]+' | sort -u); do
+      [ "$n" = "$mark" ] || stale="$stale $f:N/M=$n"
+    done
+  done
   if [ -z "$stale" ]; then
     ok "文档测试数量一致" "全部 = $mark"
   else

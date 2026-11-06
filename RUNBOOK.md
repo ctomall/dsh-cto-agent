@@ -74,7 +74,7 @@ scripts/upgrade.sh              # 拉取 → 跑全量测试 → 重启 → 等 
 
 ## 4. 上线前检查清单
 
-- [ ] `node --test impl/test/*.test.mjs` 全绿
+- [ ] `node --test --test-concurrency=6 impl/test/*.test.mjs` 全绿（**必须带并发限制**，默认并发会在负载下假红）
 - [ ] `./scripts/acceptance.sh --require-all` 无非预期 SKIP
 - [ ] `/api/version` == `git rev-parse --short HEAD`
 - [ ] `.runtime-tokens` / `.runtime-app-password` 未入库（`git ls-files | grep runtime` 为空）
@@ -222,7 +222,7 @@ sysctl net.ipv4.tcp_mtu_probing → 0             （内核对 PMTU 黑洞不做
 
 ```bash
 git clone git@github.com:ctomall/dsh-cto-agent.git && cd dsh-cto-agent
-node --test impl/test/*.test.mjs            # 282 通过
+node --test --test-concurrency=6 impl/test/*.test.mjs   # 282 通过
 APP_PASSWORD='pw-1' APP_SESSION_SECRET='secret-1234567890' \
 CUBE_TOKENS='{"tok_a":{"tenantId":"t_a","userId":"u_a"},"tok_b":{"tenantId":"t_b","userId":"u_b"}}' \
 PORT=8899 DB_PATH=/tmp/vc/cube.db WORKSPACE_ROOT=/tmp/vc/ws node impl/src/server.mjs &

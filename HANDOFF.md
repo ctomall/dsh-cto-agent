@@ -113,7 +113,7 @@ CF_API_ONLY=1 ./scripts/check-cf-edge.sh        # 只验 API 侧：应用存在 
 ## 怎么判断"整体完成"
 
 ```bash
-./scripts/acceptance.sh --require-all && node --test impl/test/*.test.mjs
+./scripts/acceptance.sh --require-all && node --test --test-concurrency=6 impl/test/*.test.mjs
 ```
 
 `--require-all` 在仍有 SKIP 时返回 3。**只有 exit 0 才算三项全绿。**
