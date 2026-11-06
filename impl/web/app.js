@@ -154,6 +154,8 @@ function approvalCard(p) {
       markDecided(decision)
       // 同时更新上方工具卡的状态：刷新还原过的卡片不会走 SSE 的 callId 匹配
       setToolState(p.callId, decision === 'deny' ? 'muted' : 'running', decision === 'deny' ? '已拒绝' : '执行中')
+      // POST 返回时授权已落库，这里刷新一次最稳妥（不依赖 SSE 时序）
+      if (decision === 'allow_session') loadGrants()
     } else {
       // 失败要让用户能重试：恢复按钮并提示
       state.decided = false

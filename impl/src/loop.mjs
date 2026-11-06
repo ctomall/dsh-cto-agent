@@ -164,6 +164,11 @@ export class AgentLoop {
     }
     const p = this.pending.get(runId) ?? this.pendingStore?.load(runId) ?? null
     if (!p) return { status, note: 'no_pending_approval' }
+    // 先落授权再发事件：事件到达前端时，/grants 必须已经是新状态
+    // （否则前端在 approval.decided 里刷新授权面板会读到旧值，面板永远显示"尚未授权"）
+    if (decision === 'allow_session' && this.grants) {
+      this.grants.add({ tenantId: p.tenantId, sessionId: p.sessionId, tool: p.call.name })
+    }
     this.rc.emitTo(runId, 'approval.decided', { callId: p.callId, decision })
     this.pending.delete(runId)
     this.pendingStore?.clear(runId)
@@ -172,10 +177,6 @@ export class AgentLoop {
       this.rc.transition(runId, 'canceled')
       this.rc.emitTo(runId, 'run.canceled', { runId })
       return { status: 'canceled' }
-    }
-
-    if (decision === 'allow_session' && this.grants) {
-      this.grants.add({ tenantId: p.tenantId, sessionId: p.sessionId, tool: p.call.name })
     }
 
     // 竞态保护：判完终态到真正迁移之间，可能被 cancel 抢先改状态；
