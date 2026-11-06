@@ -77,6 +77,20 @@ test('落后 N 个提交：ff-only 拉取并返回新 SHA', async () => {
   assert.ok(exec.calls.includes('pull --ff-only origin main'))
 })
 
+test('本地已分叉 → 409 not_fast_forward，且不 pull、不 reset', async () => {
+  const exec = fakeExec({
+    'rev-parse': (args) => (args.includes('--short') ? 'aaa' : 'true'),
+    status: '',
+    fetch: '',
+    'rev-list': '2',
+    'merge-base': () => { throw new Error('not ancestor') },
+  })
+  const up = createUpgrade({ repoDir: '/repo', exec })
+  await assert.rejects(() => up(), (e) => e instanceof UpgradeError && e.code === 'not_fast_forward' && e.status === 409)
+  assert.equal(exec.calls.some((c) => c.startsWith('pull')), false, '分叉时不得尝试 pull')
+  assert.equal(exec.calls.some((c) => c.startsWith('reset')), false, '分叉时不得 reset')
+})
+
 test('并发调用 → 第二次 409（单飞锁）', async () => {
   let release
   const gate = new Promise((r) => (release = r))

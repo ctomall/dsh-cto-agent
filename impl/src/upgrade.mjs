@@ -62,6 +62,14 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
         return { ok: true, upToDate: true, before, after: before, behind: 0, tests: 'skipped' }
       }
 
+      // 先证明能快进：HEAD 必须是 origin/main 的祖先，否则一律拒绝（不尝试 pull、不 reset）
+      const canFastForward = await run(['merge-base', '--is-ancestor', 'HEAD', `${remote}/${branch}`])
+        .then(() => true)
+        .catch(() => false)
+      if (!canFastForward) {
+        throw new UpgradeError('not_fast_forward', `本地与 ${remote}/${branch} 已分叉，拒绝非快进合并`, 409)
+      }
+
       await run(['pull', '--ff-only', remote, branch]).catch((e) => {
         throw new UpgradeError('pull_failed', e.message, 500)
       })
