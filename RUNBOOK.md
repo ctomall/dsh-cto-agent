@@ -367,3 +367,19 @@ sudo systemctl enable --now cube-agent-backup.timer cube-agent-restore-drill.tim
 
 **实测（2026-11-07）**：手动 start `cube-agent-maintenance.service` → 两个 Exec 均 `status=0/SUCCESS`，
 `--report` 输出现状（runs 994 / events 7365 / audit 1007）；因库龄不足 90 天，本次删除 0 行（符合预期）。
+
+## 验收器灵敏度自检（每个大改动后跑）
+
+验收器（`acceptance.sh`）的 ① 段是"真实链路"判据。它有两个必须成立的方向：
+
+```bash
+./scripts/check-arbiter-bites.sh             # 制造故障 → ① 必须变红（证明它会咬人）
+./scripts/check-arbiter-bites.sh --positive   # 正常链路 → ① 必须全绿（证明判据可满足）
+```
+
+**2026-11-06 复跑**（经历隧道/PMTU/并发/门禁等十余轮改动后）：
+
+- 故障实例：`✖ 审批后产出`（事件流停在 `run.finished` 前，缺 `artifact.created`）→ `pass=8 fail=1` → **会咬人**
+- 正常实例：`✔ 审批后产出 artifact.created` → `pass=10 fail=0` → **判据可满足**
+
+只测一个方向都不够：**只会红 = 永远失败；永远绿 = 什么都没测。**
