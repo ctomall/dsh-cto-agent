@@ -202,3 +202,12 @@ PW='pw-1' TOK_A=tok_a TOK_B=tok_b ./scripts/acceptance.sh http://127.0.0.1:8899
 ```
 
 **实测**：空库干净克隆上 pass=20 fail=0 skip=2（2026-11-06）。
+
+## 就绪快照（一条命令，数字全部现场生成）
+
+```bash
+node scripts/readiness-report.mjs --base http://127.0.0.1:8787
+```
+
+输出：全量测试通过数、目标验收 pass/fail/skip、①②③ 的凭据状态、线上版本、演练脚本是否就绪，
+以及"阻塞项 + 放行命令"。**所有数字来自现场执行**，不是手写，因此不会随代码漂移。
