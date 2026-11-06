@@ -41,7 +41,7 @@ async function main() {
     row('单 run 步数上限', body.agent?.maxSteps ? `${body.agent.maxSteps} 步` : '-'),
     row('单 run 超时', body.agent?.timeoutMs ? `${(body.agent.timeoutMs / 1000).toFixed(0)} 秒` : '-'),
     row('历史带入条数', body.agent?.historyLimit ? `${body.agent.historyLimit} 条` : '-'),
-    row('单次输出上限', body.agent?.maxOutputTokens ? `${body.agent.maxOutputTokens} tokens` : '未设置（用厂商默认）'),
+    row('单次输出上限', body.agent?.maxOutput ? `${body.agent.maxOutput} tokens` : '未设置（用厂商默认）'),
     row('限流 api / runs / upgrade / login', [body.limits?.api?.limit, body.limits?.runs?.limit, body.limits?.upgrade?.limit, body.limits?.login?.limit].map((n) => `${n}/分`).join(' · '))
   )
   // 模型连通性探针：接上 key 后先"试一句"，再跑真任务

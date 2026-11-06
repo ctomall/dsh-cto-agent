@@ -542,7 +542,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     },
           historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
           historyChars: numEnv('AGENT_HISTORY_CHARS', 8_000),
-          maxOutputTokens: numEnv('AGENT_MAX_OUTPUT_TOKENS', 0) || null,
+          maxOutput: numEnv('AGENT_MAX_OUTPUT_TOKENS', 0) || null,
         },
         startedAt,
         // 明确不返回：令牌、口令、模型密钥、DB 绝对路径

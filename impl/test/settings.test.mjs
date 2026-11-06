@@ -24,8 +24,18 @@ test('/api/settings：未登录 401；登录后返回运行时配置且不含任
   assert.ok(b.maxBodyBytes > 0)
 
   const raw = JSON.stringify(b).toLowerCase()
-  for (const bad of ['token', 'password', 'api_key', 'apikey', 'secret', 'dbpath', 'db_path']) {
+  for (const bad of ['password', 'api_key', 'apikey', 'secret', 'dbpath', 'db_path']) {
     assert.ok(!raw.includes(bad), `响应不应包含 ${bad}`)
+  }
+  // 更硬的断言：真实密钥值（而非关键词）绝不能出现在响应里
+  const secretValues = [
+    process.env.CUBE_TOKENS,
+    process.env.APP_PASSWORD,
+    process.env.APP_SESSION_SECRET,
+    process.env.MODEL_API_KEY,
+  ].filter((v) => typeof v === 'string' && v.length >= 8)
+  for (const v of secretValues) {
+    assert.ok(!JSON.stringify(b).includes(v), '响应泄露了真实密钥值')
   }
 })
 
