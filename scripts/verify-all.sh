@@ -83,6 +83,8 @@ if curl -s -m 3 http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 流式渐进渲染 $out"; }
   out=$(timeout 160 node scripts/check-empty-answer-note.mjs 2>&1 | tail -1)
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 空正文提示 $out"; }
+  out=$(timeout 240 ./scripts/check-first-real-run.sh 2>&1 | tail -1)
+  echo "$out" | grep -q 'first-real-run 可用' || { bfail=$((bfail+1)); echo "  ✖ 放行脚本自检 $out"; }
   out=$(timeout 120 ./scripts/check-arbiter-bites.sh 2>&1 | tail -1)
   echo "$out" | grep -q '验收器会咬人' || { bfail=$((bfail+1)); echo "  ✖ 验收器自检(红) $out"; }
   out=$(timeout 120 ./scripts/check-arbiter-bites.sh --positive 2>&1 | tail -1)

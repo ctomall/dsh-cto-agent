@@ -35,6 +35,7 @@
 | `check-double-submit.mjs` | 浏览器级验证：连按两次发送，只能创建一个 run（真模型下每次都计费）。 |
 | `check-empty-answer-note.mjs` | 浏览器级验证：模型只输出思考、没有正文时，界面必须给出说明（而不是只显示"完成"）。 |
 | `check-failure-reason.mjs` | 浏览器级验证：三类失败都要在界面上给出原因（状态栏 + 失败卡片）。 |
+| `check-first-real-run.sh` | 验证"操作者拿到 key 后的第 5 步"（first-real-run.sh）本身可用： |
 | `check-no-dup-stream.mjs` | 浏览器级验证：同一 run 只订阅一次 → 助手文本不重复、产物卡只有一张。 |
 | `check-send-before-session.mjs` | 浏览器级验证：会话列表还没回来（或很慢）时立刻发送，也必须能建出 run。 |
 | `check-session-ops.mjs` | 浏览器级验证（确定性、临时实例）：会话筛选 → 重命名 → 两段删除 |
