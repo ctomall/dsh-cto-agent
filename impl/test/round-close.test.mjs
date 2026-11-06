@@ -41,3 +41,17 @@ test('锚点不存在 → 拒绝写记录（这是这条约束的全部意义）
   try { written = readFileSync(out, 'utf8') } catch { written = '' }
   assert.equal(written.trim(), '', '失败时不得写任何记录')
 })
+
+test('记录 JSON 非法时，文档必须保持原样（不做半成品）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rc-'))
+  const doc = join(dir, 'v.md')
+  const chunk = join(dir, 'c.md')
+  const rec = join(dir, 'r.json')
+  writeFileSync(doc, 'A\nUNIQUE-ANCHOR-9f\nB\n')
+  writeFileSync(chunk, '\n新内容\n')
+  writeFileSync(rec, '{not json')
+  const r = spawnSync('node', [script, '--doc', doc, '--after', 'UNIQUE-ANCHOR-9f', '--chunk', chunk, '--record', rec], { encoding: 'utf8' })
+  assert.equal(r.status, 4, r.stderr)
+  assert.match(readFileSync(doc, 'utf8'), /^A\nUNIQUE-ANCHOR-9f\nB\n$/, '文档不应被修改')
+  assert.ok(!readFileSync(doc, 'utf8').includes('新内容'), '不应留下半成品内容')
+})

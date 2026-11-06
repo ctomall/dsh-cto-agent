@@ -14,20 +14,26 @@ if (!doc || !after || !chunk || !record) {
   process.exit(2)
 }
 
+// 双向前置校验：记录必须先能解析，再去改文档。
+// 否则会出现"文档改好了、记录写不进去"的半成品（v194 真实发生过）。
+let rec
+try {
+  rec = JSON.parse(readFileSync(record, 'utf8'))
+} catch (e) {
+  console.error(`FAIL: 记录不是合法 JSON，未改文档 —— ${e.message}`)
+  process.exit(4)
+}
+if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
+  console.error('FAIL: 记录必须是对象，未改文档')
+  process.exit(4)
+}
+
 let applied
 try {
   applied = appendToDoc({ file: doc, after, text: chunk })
 } catch (e) {
   console.error(`FAIL: 文档补丁未落地，拒绝写记录 —— ${e.message}`)
   process.exit(3)
-}
-
-let rec
-try {
-  rec = JSON.parse(readFileSync(record, 'utf8'))
-} catch (e) {
-  console.error(`FAIL: 记录不是合法 JSON —— ${e.message}（文档已更新：${doc}）`)
-  process.exit(4)
 }
 rec.doc_verified = applied.marker
 rec.doc_file = doc
