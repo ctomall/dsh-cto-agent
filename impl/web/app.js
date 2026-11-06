@@ -593,15 +593,8 @@ async function boot() {
 
   // 启动顺序里的每一步都必须容错：公网链路会丢包，任一步超时若中断整个 boot，
   // 用户看到的就是"空白工作台 + 所有按钮失灵"（真实发生过：列表 0 行、筛选不响应）
-  const safe = async (fn, name) => {
-    try { await fn() } catch (e) { console.warn(`[boot] ${name} 失败：`, e?.message ?? e) }
-  }
-  await safe(loadDriver, 'loadDriver')
-  await safe(loadHistory, 'loadHistory')
-  await safe(loadPending, 'loadPending')
-  await safe(loadActive, 'loadActive')
-  await safe(loadGrants, 'loadGrants')
-  await safe(loadArtifacts, 'loadArtifacts')
+  // 先绑定交互，再加载数据：公网下加载可能很慢（每步都有超时），
+  // 但"筛选/重命名"这类纯前端交互不该等数据回来才生效
   const titleEl = $('#title')
   if (titleEl) {
     titleEl.addEventListener('dblclick', startRename)
@@ -611,6 +604,23 @@ async function boot() {
     })
   }
   bindSessionFilter()
+
+  // 不只是"失败"要容错，"卡住"也要：某一步若永不返回（连接半开、响应体不结束），
+  // boot 会停在半路 —— 表现为"列表出来了但筛选/按钮全失灵"（公网真实复现）。
+  const BOOT_STEP_MS = 8000
+  const safe = async (fn, name) => {
+    const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), BOOT_STEP_MS))
+    try {
+      const r = await Promise.race([fn(), timeout])
+      if (r === 'timeout') console.warn(`[boot] ${name} 超过 ${BOOT_STEP_MS}ms 未返回，跳过`)
+    } catch (e) { console.warn(`[boot] ${name} 失败：`, e?.message ?? e) }
+  }
+  await safe(loadDriver, 'loadDriver')
+  await safe(loadHistory, 'loadHistory')
+  await safe(loadPending, 'loadPending')
+  await safe(loadActive, 'loadActive')
+  await safe(loadGrants, 'loadGrants')
+  await safe(loadArtifacts, 'loadArtifacts')
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
 
