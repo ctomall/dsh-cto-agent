@@ -319,6 +319,10 @@ function handleEvent(type, p) {
 }
 
 function subscribe(runId, { lastEventId = 0 } = {}) {
+  // 同一时刻只保留一条实时连接（避免连接泄漏与重复处理）。
+  // 注：v176 实测证明"重复卡片"不是连接泄漏导致的（关掉旧连接后仍会处理两次），
+  // 真正兜底的是 run.failed 的 runId 去重；这里的关闭仍保留，属于正确的资源纪律。
+  try { state.es?.close() } catch {}
   const q = new URLSearchParams({ token })
   if (lastEventId) q.set('lastEventId', String(lastEventId))
   const es = new EventSource(`/api/runs/${runId}/events?${q.toString()}`)
