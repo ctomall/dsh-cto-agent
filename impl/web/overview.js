@@ -144,13 +144,9 @@ document.addEventListener('keydown', (e) => {
 })
 
 async function load() {
-  if (!token) {
-    $('#layers').append(el('div', 'empty', '缺少访问令牌：地址后加 ?token=…'))
-    return
-  }
-  const res = await fetch('/api/overview', { headers: { authorization: `Bearer ${token}` } })
+  const res = await fetch('/api/overview', { headers: token ? { authorization: `Bearer ${token}` } : {} })
   if (!res.ok) {
-    $('#layers').append(el('div', 'empty', `读取失败（${res.status}）`))
+    $('#layers').append(el('div', 'empty', res.status === 401 ? '未认证：请先通过登录门' : `读取失败（${res.status}）`))
     return
   }
   const d = await res.json()

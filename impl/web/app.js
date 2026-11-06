@@ -30,7 +30,11 @@ const state = {
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(opts.headers || {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(opts.headers || {}),
+    },
   })
   return { status: res.status, body: await res.json().catch(() => ({})) }
 }
@@ -276,12 +280,14 @@ $('#openArtifactsTop').addEventListener('click', () => setPanel(true))
 $('#closePanel').addEventListener('click', () => setPanel(false))
 
 async function boot() {
-  if (!token) {
-    $('#who').textContent = 'no token'
+  // 身份有两种：URL 里的 ?token=（多租户），或口令门下发的 HttpOnly Cookie。
+  // Cookie 读不到（HttpOnly），所以直接问服务端，别用 document.cookie 判断。
+  const me = await api('/api/me')
+  if (me.status !== 200) {
+    $('#who').textContent = '未认证'
     return
   }
-  const me = await api('/api/me')
-  $('#who').textContent = me.status === 200 ? `tenant ${me.body.tenantId}` : '未认证'
+  $('#who').textContent = `tenant ${me.body.tenantId}`
   $('#sbTenant').textContent = me.status === 200 ? `tenant ${me.body.tenantId}` : '-'
 
   const v = await fetch('/api/version').then((r) => r.json()).catch(() => ({ sha: '-' }))

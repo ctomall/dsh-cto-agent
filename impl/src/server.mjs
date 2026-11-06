@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { dirname, resolve, extname, sep } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { resolveContext, auditDenial, TOKEN_SOURCE } from './context.mjs'
+import { resolveContext, auditDenial, TOKEN_SOURCE, UNAUTHENTICATED } from './context.mjs'
 import { createUpgrade, createUpgradeRoute } from './upgrade.mjs'
 import { execFileSync } from 'node:child_process'
 import { EventLog } from './events.mjs'
@@ -60,15 +60,17 @@ const readJson = (req) =>
   })
 
 // 纯函数式路由（同步部分）：测试可直接调用，不需要端口
-export function handleRequest(db, req) {
+// resolveCtx 由调用方注入：createApp 传入带 Cookie 映射的版本；测试可直接调用（默认只认 Bearer）
+export function handleRequest(db, req, resolveCtx = (r) => resolveContext(r.headers?.authorization)) {
   const url = new URL(req.url, 'http://local')
+  const ctxOf = resolveCtx
 
   // 探活：只暴露启动快照 SHA，不需要身份
   if (req.method === 'GET' && url.pathname === '/api/version') {
     return json(200, { sha: BOOT_SHA })
   }
 
-  const ctx = resolveContext(req.headers?.authorization)
+  const ctx = ctxOf(req)
   if (ctx.error) return ctx.error
   const m = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname)
 
@@ -134,6 +136,18 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   metrics.inc('login_failures_total', {}, 0)
   metrics.inc('grants_revoked_total', {}, 0)
   const gate = createGate({ password: process.env.APP_PASSWORD, secret: process.env.APP_SESSION_SECRET })
+  // Cookie 身份门只证明"过了口令"，不区分租户；API 身份统一在这里解析：
+  //   1) 有 Bearer → 按 token 解析（多租户正路）
+  //   2) 无 Bearer 但 Cookie 有效 → 映射到 GATE_TENANT/GATE_USER（单口令部署的兜底）
+  const GATE_TENANT = process.env.GATE_TENANT ?? 't_a'
+  const GATE_USER = process.env.GATE_USER ?? 'u_a'
+  const cookieAuthed = (req) => !req.headers?.authorization && !!gate && gate.verify(req.headers?.cookie)
+  const ctxOf = (req) => {
+    const auth = req.headers?.authorization
+    if (auth) return resolveContext(auth)
+    if (cookieAuthed(req)) return { tenantId: GATE_TENANT, userId: GATE_USER, permissions: [] }
+    return { error: UNAUTHENTICATED }
+  }
   if (gate) console.log('[cube-agent] 身份门：已开启（APP_PASSWORD）')
   const grants = createGrants(db)
   const loop = new AgentLoop({
@@ -239,6 +253,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       }
     }
 
+    // —— CSRF：Cookie 身份 + 变更请求时，要求同源（浏览器会给 sec-fetch-site）——
+    if (cookieAuthed(req) && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      const site = req.headers['sec-fetch-site']
+      if (site && site !== 'same-origin') return reply(res, json(403, { error: 'csrf_blocked' }))
+    }
+
     // —— 登录页与提交 ——
     if (req.method === 'GET' && url.pathname === '/login') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
@@ -296,7 +316,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 模型状态（① 的可观测性：一眼看出线上是真模型还是假模型）——
     if (req.method === 'GET' && url.pathname === '/api/model/status') {
       if (gate && !gate.verify(req.headers.cookie)) return reply(res, json(401, { error: 'unauthenticated' }))
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       return reply(res, json(200, { driver: driver.name, source: driverSource, real: !driver.name.startsWith('fake') }))
     }
@@ -308,7 +328,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
     // —— 总览：只读聚合（租户内），给 /overview 页面用 ——
     if (req.method === 'GET' && url.pathname === '/api/overview') {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const t = ctx.tenantId
       const one = (sql) => db.prepare(sql).get(t)?.c ?? 0
@@ -371,8 +391,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— SSE：回放 + 实时推送（EventSource 不能带 header，故允许 ?token=）——
     const evm = /^\/api\/runs\/([^/]+)\/events$/.exec(url.pathname)
     if (req.method === 'GET' && evm) {
-      const auth = req.headers?.authorization ?? `Bearer ${url.searchParams.get('token') ?? ''}`
-      const ctx = resolveContext(auth)
+      const qt = url.searchParams.get('token')
+      const ctx = qt ? resolveContext(`Bearer ${qt}`) : ctxOf(req)
       if (ctx.error) { res.writeHead(401, { 'content-type': 'application/json' }); return res.end('{"error":"unauthenticated"}') }
       const runId = decodeURIComponent(evm[1])
       if (!rc.status(runId)) { res.writeHead(404); return res.end() }
@@ -386,7 +406,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
     // —— 创建 run（跑到审批处停下）——
     if (req.method === 'POST' && url.pathname === '/api/runs') {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const body = await readJson(req)
       const sessionId = String(body.sessionId ?? 's_a1')
@@ -406,7 +426,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 会话历史（刷新页面后恢复）——
     const hist = /^\/api\/sessions\/([^/]+)\/messages$/.exec(url.pathname)
     if (req.method === 'GET' && hist) {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const sessionId = decodeURIComponent(hist[1])
       const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
@@ -419,7 +439,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
     // —— 新建会话（验收与前端都需要；租户由 ctx 决定，不接受外部指定）——
     if (req.method === 'POST' && url.pathname === '/api/sessions') {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const body = await readJson(req)
       const id = `s_${Math.random().toString(16).slice(2, 10)}`
@@ -431,7 +451,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 撤销会话级授权（已知缺口补口：v16 明确写过"撤销口径缺失"）——
     const rv = /^\/api\/sessions\/([^/]+)\/grants\/revoke$/.exec(url.pathname)
     if (req.method === 'POST' && rv) {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const sessionId = decodeURIComponent(rv[1])
       const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
@@ -447,7 +467,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 取消 run（文档 §2.2 可取消）——
     const cn = /^\/api\/runs\/([^/]+)\/cancel$/.exec(url.pathname)
     if (req.method === 'POST' && cn) {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const runId = decodeURIComponent(cn[1])
       const run = db.prepare('select tenant_id from runs where id = ?').get(runId)
@@ -458,7 +478,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 审批回写 ——
     const ap = /^\/api\/approvals\/([^/]+)$/.exec(url.pathname)
     if (req.method === 'POST' && ap) {
-      const ctx = resolveContext(req.headers?.authorization)
+      const ctx = ctxOf(req)
       if (ctx.error) return reply(res, ctx.error)
       const runId = decodeURIComponent(ap[1])
       if (!rc.status(runId)) return reply(res, json(404, { error: 'not_found' }))
@@ -493,7 +513,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return
     }
 
-    reply(res, handleRequest(db, req))
+    reply(res, handleRequest(db, req, ctxOf))
   })
 }
 
