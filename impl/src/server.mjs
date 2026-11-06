@@ -334,6 +334,10 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     if (req.method === 'GET' && url.pathname === '/metrics') {
       metrics.set('model_real', {}, driver.name.startsWith('fake') ? 0 : 1)
       metrics.set('session_grants', {}, Number(db.prepare('select count(*) c from session_grants').get().c))
+      try {
+        metrics.set('db_events_rows', {}, Number(db.prepare('select count(*) c from events').get().c))
+        metrics.set('db_size_bytes', {}, Number(db.prepare('pragma page_count').get().page_count) * Number(db.prepare('pragma page_size').get().page_size))
+      } catch {}
       res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' })
       return res.end(metrics.render())
     }

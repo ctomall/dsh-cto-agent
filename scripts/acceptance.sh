@@ -80,6 +80,11 @@ echo "$e3" | grep -q 'approval.requested' && ok "撤销后重新审批" "approva
 x=$(code -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -d '{"input":"x","sessionId":"s_b1"}' "$BASE/api/runs")
 [ "$x" = 404 ] && ok "跨租户 sessionId" "404" || no "跨租户 sessionId" "期望 404，实际 $x"
 
+# 验收自己收尾：r3 等仍在等审批的 run 必须取消，否则每次验收都留下僵尸（cancel 幂等）
+for r in $r1 $r2 $r3; do
+  [ -n "$r" ] && curl -s -o /dev/null -m 20 -b "$JAR" -H "Authorization: Bearer $T_A" -X POST "$BASE/api/runs/$r/cancel" || true
+done
+
 echo "== ③ 访问控制与限流"
 [ "$(code "$BASE/")" = 302 ] && ok "未登录首页" "302" || no "未登录首页" "期望 302"
 [ "$(code "$BASE/api/sessions")" = 401 ] && ok "未登录 API" "401" || no "未登录 API" "期望 401"
