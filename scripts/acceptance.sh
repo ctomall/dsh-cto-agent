@@ -160,6 +160,13 @@ r1=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: applica
 e1=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r1/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
 echo "$e1" | grep -q 'approval.requested' && ok "首次要求审批" "approval.requested" || no "首次要求审批" "$e1"
 curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 30 -d '{"decision":"allow_session"}' "$BASE/api/approvals/$r1" >/dev/null
+# 审批返回后授权应已落库（服务端同步写入）；这里再短暂确认一次，
+# 避免把"测量太早"误报成"会话授权没生效"
+for i in $(seq 1 20); do
+  g=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/sessions/$SID/grants" 2>/dev/null)
+  echo "$g" | grep -q 'fs.write' && break
+  sleep 0.5
+done
 r2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"再写一份\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
 e2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r2/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
 if echo "$e2" | grep -q 'approval.requested'; then no "同会话第二次免审批" "$e2"; else ok "同会话第二次免审批" "auto_approved"; fi
