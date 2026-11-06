@@ -74,6 +74,17 @@ export class AgentLoop {
       return { status: 'done' }
     }
 
+    // 真实模型可能给出意料之外的形状（未知 type、缺 call、call.name 非字符串）：
+    // 必须在 run 内干净失败，而不是把异常抛到调用方、把 run 挂在 running 上
+    if (!decision || decision.type !== 'tool_call' || !decision.call || typeof decision.call.name !== 'string' || !decision.call.name) {
+      this.rc.transition(runId, 'failed')
+      this.rc.emitTo(runId, 'run.failed', {
+        runId,
+        error: `invalid_model_output: ${JSON.stringify(decision)?.slice(0, 160) ?? 'null'}`,
+      })
+      return { status: 'failed' }
+    }
+
     const call = decision.call
     const callId = call.id || `call_${steps}`
     this.rc.emitTo(runId, 'tool.started', { tool: call.name, callId })
