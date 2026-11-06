@@ -27,7 +27,10 @@ MODEL_BASE_URL="http://127.0.0.1:$MOCK/v1" MODEL_NAME='mock-bite' MODEL_API_KEY=
 PORT=$APP DB_PATH="$WORK/cube.db" WORKSPACE_ROOT="$WORK/ws" node impl/src/server.mjs >/dev/null 2>&1 &
 for i in $(seq 1 40); do sleep 0.5; [ "$(curl -s -o /dev/null -w '%{http_code}' -m 2 "http://127.0.0.1:$APP/healthz")" = 200 ] && break; done
 
-out=$(PW='bite-pw' TOK_A=tok_a TOK_B=tok_b ./scripts/acceptance.sh "http://127.0.0.1:$APP" 2>&1)
+# 故障场景里产物永远不会出现：把等待压到 20s，避免自检要好几分钟
+out=$(PW='bite-pw' TOK_A=tok_a TOK_B=tok_b ACCEPT_ONLY=1 \
+  ACCEPT_WAIT_TOOL=20 ACCEPT_WAIT_APPROVAL=20 ACCEPT_WAIT_ARTIFACT=20 ACCEPT_WAIT_FINISH=20 \
+  ./scripts/acceptance.sh "http://127.0.0.1:$APP" 2>&1)
 line=$(printf '%s\n' "$out" | grep -E '审批后产出' | head -1)
 sum=$(printf '%s\n' "$out" | grep -E '^== 汇总' | tail -1)
 printf '%s\n' "$line"

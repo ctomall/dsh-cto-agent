@@ -222,3 +222,6 @@ node scripts/readiness-report.mjs --base http://127.0.0.1:8787
 **要求 ① 在「审批后产出」这一步变红**。实测输出：`✖ 审批后产出 …` + `== 汇总：pass=14 fail=10` + `OK: 验收器会咬人`。
 
 这类"对验收器的测试"应当定期跑：**判据松了，绿灯就是装饰**。
+
+- 自检现在 **23 秒**跑完（`ACCEPT_ONLY=1` 只跑 ①，`ACCEPT_WAIT_*=20` 把等待压短），**已纳入 `verify-all` 第 8 步**
+- 验收器的等待超时可用 `ACCEPT_WAIT_TOOL/APPROVAL/ARTIFACT/FINISH` 调整（默认 180/120/180/120s，面向真实厂商）
