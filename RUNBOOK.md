@@ -87,3 +87,11 @@ scripts/upgrade.sh              # 拉取 → 跑全量测试 → 重启 → 等 
 | Cloudflare Access | **未配置**（缺 `CLOUDFLARE_API_TOKEN` / `CF_ACCOUNT_ID` / `CF_ZONE_ID`） | 挡人的是应用层口令门，不是 CF 身份层 |
 | 真实模型 | **未接通**（缺 `MODEL_*`） | 线上 `driver: fake`，事件序列由假模型决策 |
 | 数据备份 | 未自动化 | SQLite 已落盘 `/var/lib/cube-agent/cube.db`（WAL），但无定时备份/恢复演练 |
+
+## 发布前自查：密钥不入库
+
+```bash
+./scripts/secret-scan.sh      # exit 0 才可发布
+```
+
+检查三件事：运行期密钥文件是否被忽略且未被跟踪；受控文件里是否出现密钥模式（`sk-`/私钥/`ghp_`）；当前真实密钥值是否出现在工作区或提交历史。
