@@ -282,5 +282,9 @@ export class AgentLoop {
 }
 
 function resolveTarget(call) {
-  return `/data/tenants/<t>/workspace/<${'runId'}>/${call.args?.path ?? ''}`
+  // 审批卡上给人看的是"会话工作区里的相对路径"。
+  // 以前这里渲染的是 /data/tenants/<t>/workspace/<runId>/… 这种占位路径——
+  // 它既不是真实路径（会误导用户以为是宿主机绝对路径），也没有比相对路径多任何信息。
+  const p = call?.args?.path
+  return p ? String(p) : `（${call?.name ?? '工具'}）`
 }

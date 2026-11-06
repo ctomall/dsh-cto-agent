@@ -32,6 +32,8 @@ await until(`!!document.querySelector('#input')`, 'B 输入框')
 await send('写一份报告')
 await until(`!!document.querySelector('.card.approval')`, 'B 审批卡')
 const bState = await ev(`({ approvals: document.querySelectorAll('.card.approval').length, cardText: document.querySelector('.card.approval')?.innerText.slice(0, 60) })`)
-console.log(JSON.stringify({ aState, bState }))
+// 结论：A 批准后 B 必须重新弹卡（不能继承）；A 的授权面板应显示「本会话」
+const ok = Number(bState.approvals) >= 1 && String(bState.cardText ?? '').includes('需要你确认')
+console.log(JSON.stringify({ aState, bState, verdict: { bPromptedAgain: Number(bState.approvals) >= 1, ok } }))
 await e0()
 async function e0() { await raw('Page.close', {}, 5000).catch(() => {}); ws.close() }
