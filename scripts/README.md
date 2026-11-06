@@ -27,6 +27,7 @@
 | `cdp-session-filter-check.mjs` | （无说明） |
 | `cdp-xss-check.mjs` | 浏览器级 XSS 检查：会话标题里的 HTML/脚本载荷必须被当作纯文本渲染。 |
 | `cf-access-setup.sh` | 为 cto.ila3.top 配置 Cloudflare Access + 速率限制。 |
+| `check-acceptance-with-mock-model.sh` | 用"本地 mock 模型 + 临时实例"跑一遍验收器：证明 ① 的断言**可满足**（真驱动、事件由模型决定）， |
 | `check-approval-truncation.mjs` | 浏览器级验证：超长参数被截断时，审批卡必须显示「参数较长，已截断显示」。 |
 | `check-arbiter-bites.sh` | 验收器"咬人"自检：人为制造"审批后不产出"，验收 ① 必须变红。 |
 | `check-boot-hang.mjs` | 浏览器级验证：boot 中某一步"卡住不返回"时，页面仍必须完成绑定（筛选可用）。 |

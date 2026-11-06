@@ -85,6 +85,8 @@ if curl -s -m 3 http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 空正文提示 $out"; }
   out=$(timeout 60 ./scripts/check-cf-proxy.sh 2>&1 | tail -1)
   echo "$out" | grep -qE 'fail=0' || { bfail=$((bfail+1)); echo "  ✖ CF 代理前置 $out"; }
+  out=$(timeout 500 ./scripts/check-acceptance-with-mock-model.sh 2>&1 | tail -1)
+  echo "$out" | grep -q '① 的五条断言全部通过' || { bfail=$((bfail+1)); echo "  ✖ mock 真驱动验收 $out"; }
   out=$(timeout 240 ./scripts/check-first-real-run.sh 2>&1 | tail -1)
   echo "$out" | grep -q 'first-real-run 可用' || { bfail=$((bfail+1)); echo "  ✖ 放行脚本自检 $out"; }
   out=$(timeout 120 ./scripts/check-arbiter-bites.sh 2>&1 | tail -1)

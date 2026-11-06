@@ -218,7 +218,15 @@ csrf=$(code -b "$JAR" -H 'content-type: application/json' -H 'sec-fetch-site: cr
 up=$(code -X POST -H "x-upgrade-token: wrong" "$BASE/api/admin/upgrade")
 { [ "$up" = 401 ] || [ "$up" = 403 ] || [ "$up" = 503 ] || [ "$up" = 429 ]; } && ok "升级接口需凭据" "$up" || no "升级接口需凭据" "$up"
 # "仅限授权主体"要精确：**有会话 Cookie、但没带升级 token，也必须被拒**（否则"只要登录就能升级"）
+# upgrade 桶只有 3/分：紧跟在一次升级之后跑，会拿到 429 → 等 retry-after 再测一次，避免"每次都 SKIP"
 up_cookie=$(code -b "$JAR" -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/admin/upgrade")
+if [ "$up_cookie" = "429" ]; then
+  ra=$(curl -s -D - -o /dev/null -m 10 -b "$JAR" -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/admin/upgrade" 2>/dev/null | sed -n 's/^[Rr]etry-[Aa]fter: *//p' | tr -d '\r' | head -1)
+  wait_s=$(( ${ra:-60} + 1 )); [ "$wait_s" -gt 70 ] && wait_s=70
+  echo "  … upgrade 桶限流中，等 ${wait_s}s 后重测"
+  sleep "$wait_s"
+  up_cookie=$(code -b "$JAR" -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/admin/upgrade")
+fi
 case "$up_cookie" in
   401|403) ok "升级：有会话仍需 token" "$up_cookie" ;;
   503) sk "升级：有会话仍需 token" "升级接口未启用（未配置 CUBE_UPGRADE_TOKEN）" ;;
