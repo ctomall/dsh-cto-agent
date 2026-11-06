@@ -286,3 +286,23 @@ for i in 1 2 3 4; do (node --test --test-concurrency=2 --test-timeout=30000 impl
 - 期望：4 路全部 `pass 254 / fail 0`
 - 门禁并发实测：`2 → 69s`、`4 → 37s`、**`6 → 28s`**（3 路并行跑 6 仍全绿）→ 门禁固定用 6
 - 2026-11-07 实测：修掉「并发过高 / 固定毫秒断言 / 固定端口 / 单次超时即失败」四类根因后，4 路全绿
+
+## 灾备恢复演练（实测 2026-11-07）
+
+```bash
+./scripts/restore-drill.sh 8797            # 用当前库产快照 → 还原 → 起独立实例 → 读数据
+./scripts/restore-drill.sh --from-latest   # 用定时器产出的最新备份（灾难现场那份）
+```
+
+实测输出（6 项全绿）：
+
+```
+✔ 备份产出        cube-20261106-142637.db
+✔ 还原副本        restored.db
+✔ 还原实例        :8797 /healthz ok
+✔ 总览 API 可用   sessions 字段存在
+✔ 行数一致        messages=1526
+✔ 损坏备份被识别  integrity=*** in database main ***
+```
+
+**不碰线上**：全程在临时目录 + 独立端口；最后一项是负向验证（损坏的备份必须被认出来）。
