@@ -591,12 +591,17 @@ async function boot() {
     ul.append(li)
   }
 
-  await loadDriver()
-  await loadHistory()
-  await loadPending()
-  await loadActive()
-  await loadGrants()
-  await loadArtifacts()
+  // 启动顺序里的每一步都必须容错：公网链路会丢包，任一步超时若中断整个 boot，
+  // 用户看到的就是"空白工作台 + 所有按钮失灵"（真实发生过：列表 0 行、筛选不响应）
+  const safe = async (fn, name) => {
+    try { await fn() } catch (e) { console.warn(`[boot] ${name} 失败：`, e?.message ?? e) }
+  }
+  await safe(loadDriver, 'loadDriver')
+  await safe(loadHistory, 'loadHistory')
+  await safe(loadPending, 'loadPending')
+  await safe(loadActive, 'loadActive')
+  await safe(loadGrants, 'loadGrants')
+  await safe(loadArtifacts, 'loadArtifacts')
   const titleEl = $('#title')
   if (titleEl) {
     titleEl.addEventListener('dblclick', startRename)
