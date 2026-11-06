@@ -298,7 +298,17 @@ function handleEvent(type, p) {
     setStatus('已取消', 'done')
     state.es?.close()
   } else if (type === 'run.failed') {
-    setStatus('失败', 'done')
+    // 失败必须说清原因：真实模型的失败方式很多（超时/超步数/输出不合法/上下文超限），
+    // 只显示一个"失败"等于把排查工作全丢给用户
+    const reason = String(p?.error ?? '未知原因')
+    setStatus(`失败：${reason.slice(0, 60)}`, 'done')
+    const box = el('div', 'card error')
+    const head = el('div', 'card-head')
+    head.append(el('span', 'title', '运行失败'))
+    const body = el('div', 'body')
+    body.append(el('p', null, reason))
+    box.append(head, body)
+    streamInner().append(box)
     state.es?.close()
   }
 }

@@ -320,3 +320,8 @@ li:focus-within > .row-del { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }
+
+/* 运行失败卡片：失败原因要能一眼看见，且不喧宾夺主 */
+.card.error { border-color: #f0c2bb; background: #fff7f6; }
+.card.error .title { color: #b42318; }
+.card.error .body p { margin: 0; color: #7a271a; font-size: 13px; line-height: 1.5; word-break: break-word; }
