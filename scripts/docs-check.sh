@@ -47,5 +47,18 @@ for doc in HANDOFF.md VERIFICATION.md README.md RUNBOOK.md SECURITY.md; do
   [ -z "$miss" ] && ok "$doc 引用的脚本" "全部存在" || no "$doc 引用的脚本" "缺失:$miss"
 done
 
+# 测试文件数：文档里的标记必须与实际一致（防止"加了测试但交接文档没更新"）
+actual_files=$(ls impl/test/*.test.mjs 2>/dev/null | wc -l | tr -d ' ')
+declared=$(grep -o '<!-- test-files: [0-9]* -->' HANDOFF.md 2>/dev/null | grep -o '[0-9]*' | head -1)
+if [ -n "${declared:-}" ]; then
+  if [ "$declared" = "$actual_files" ]; then
+    ok "HANDOFF 测试文件数" "$actual_files"
+  else
+    no "HANDOFF 测试文件数" "文档=$declared 实际=$actual_files"
+  fi
+else
+  skip "HANDOFF 测试文件数" "缺少 <!-- test-files: N --> 标记"
+fi
+
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
