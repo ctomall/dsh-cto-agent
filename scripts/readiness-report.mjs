@@ -60,6 +60,20 @@ const dfCols = dfLine.trim().split(/\s+/)
 const availKb = Number(dfCols[3] ?? NaN)
 const availGb = Number.isFinite(availKb) ? availKb / 1024 / 1024 : null
 const diskOk = availGb === null ? null : availGb >= 2
+// 证书到期：公网 TLS 终有一天会过期，过期那天所有公网检查会一起红
+// 证书查的是**公网域名**，不能用 --base 的主机名（本机跑时那是 127.0.0.1，443 上没有服务）
+const pubHost = process.env.PUBLIC_HOST ?? 'cto.ila3.top'
+const cert = run('bash', ['-c', `echo | timeout 20 openssl s_client -connect ${pubHost}:443 -servername ${pubHost} 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null`], { timeout: 25000 })
+const mEnd = cert.out.match(/notAfter=(.+)/)
+let certRow = '未能读取'
+let certNote = ''
+if (mEnd) {
+  const end = new Date(mEnd[1]); const days = Math.floor((end - Date.now()) / 86400000)
+  certRow = `${end.toISOString().slice(0, 10)}（${days} 天后）`
+  if (days < 14) certNote = '**14 天内到期：Cloudflare 通常自动续期，若未续需人工处理**'
+}
+add('公网证书到期', certRow, certNote)
+
 add('磁盘余量', availGb === null ? '未能读取' : `${availGb.toFixed(1)} GB 可用（${dfCols[4] ?? '?'} 已用）`,
   diskOk === false ? '**低于 2GB：写库/升级/备份会开始失败**' : '')
 
