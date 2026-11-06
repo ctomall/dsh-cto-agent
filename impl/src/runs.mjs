@@ -26,11 +26,12 @@ export class RunController {
     return seq
   }
 
-  create(runId, { tenantId = null, sessionId = null } = {}) {
+  create(runId, { tenantId = null, sessionId = null, driver = null } = {}) {
     this.db
       .prepare('insert into runs (id, status, started_at, tenant_id, session_id) values (?, ?, ?, ?, ?)')
       .run(runId, 'queued', new Date().toISOString(), tenantId, sessionId)
-    this.emitTo(runId, 'run.started', { runId })
+    // 把"谁在驱动这次 run"写进事件：否则事后没人能分辨这是演示驱动还是真实模型
+    this.emitTo(runId, 'run.started', { runId, ...(driver ? { driver, real: !String(driver).startsWith('fake') } : {}) })
     return runId
   }
 

@@ -22,7 +22,7 @@ export class AgentLoop {
   }
 
   async start({ runId, tenantId = null, sessionId = null, input }) {
-    this.rc.create(runId, { tenantId, sessionId })
+    this.rc.create(runId, { tenantId, sessionId, driver: this.driver?.name ?? null })
     this.rc.transition(runId, 'running')
     this.rc.emitTo(runId, 'text.delta', { text: `收到目标：${input}` })
     // 先读历史，再落本条 user 消息，避免自己把自己读进来重复一遍
