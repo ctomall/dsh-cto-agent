@@ -47,12 +47,15 @@ export const LIMITS = {
   runs: { limit: num('RATE_RUNS_LIMIT', 20), windowMs: 60_000 },
   upgrade: { limit: num('RATE_UPGRADE_LIMIT', 3), windowMs: 60_000 },
   login: { limit: num('RATE_LOGIN_LIMIT', 5), windowMs: 60_000 },
+  // 探针每次都会真调一次模型（花钱）：单独桶，默认 5/分
+  probe: { limit: num('RATE_PROBE_LIMIT', 5), windowMs: 60_000 },
 }
 
 export function bucketFor(pathname, method) {
   if (pathname === '/api/admin/upgrade') return 'upgrade'
   if (pathname === '/login' && method === 'POST') return 'login'
   if (pathname === '/api/runs' && method === 'POST') return 'runs'
+  if (pathname === '/api/model/probe' && method === 'POST') return 'probe'
   if (pathname.startsWith('/api/')) return 'api'
   return null
 }
