@@ -36,11 +36,17 @@ export function createRateLimiter({ clock = () => Date.now(), maxKeys = 10_000 }
   }
 }
 
+// 限流阈值可按环境变量调整：高吞吐部署不该为此改代码
+const num = (envKey, fallback) => {
+  const v = Number(process.env[envKey])
+  return Number.isFinite(v) && v > 0 ? Math.trunc(v) : fallback
+}
+
 export const LIMITS = {
-  api: { limit: 60, windowMs: 60_000 },
-  runs: { limit: 20, windowMs: 60_000 },
-  upgrade: { limit: 3, windowMs: 60_000 },
-  login: { limit: 5, windowMs: 60_000 },
+  api: { limit: num('RATE_API_LIMIT', 60), windowMs: 60_000 },
+  runs: { limit: num('RATE_RUNS_LIMIT', 20), windowMs: 60_000 },
+  upgrade: { limit: num('RATE_UPGRADE_LIMIT', 3), windowMs: 60_000 },
+  login: { limit: num('RATE_LOGIN_LIMIT', 5), windowMs: 60_000 },
 }
 
 export function bucketFor(pathname, method) {

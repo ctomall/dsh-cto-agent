@@ -95,3 +95,20 @@ test('登录失败单独限流：5 次/分钟', async (t) => {
   assert.equal(codes.slice(0, 5).every((c) => c === 401), true)
   assert.deepEqual(codes.slice(5), [429, 429])
 })
+
+test('限流阈值可用环境变量覆盖（RATE_RUNS_LIMIT 等）', async () => {
+  process.env.RATE_RUNS_LIMIT = '123'
+  process.env.RATE_LOGIN_LIMIT = '7'
+  try {
+    // 用 query 参数绕开 ESM 模块缓存，确保读到的是设置 env 之后的模块
+    const { pathToFileURL } = await import('node:url')
+    const url = pathToFileURL(new URL('../src/ratelimit.mjs', import.meta.url).pathname).href + `?v=${Date.now()}`
+    const { LIMITS } = await import(url)
+    assert.equal(LIMITS.runs.limit, 123)
+    assert.equal(LIMITS.login.limit, 7)
+    assert.equal(LIMITS.api.limit, 60, '未覆盖的桶保持默认')
+  } finally {
+    delete process.env.RATE_RUNS_LIMIT
+    delete process.env.RATE_LOGIN_LIMIT
+  }
+})
