@@ -56,6 +56,22 @@ else
 fi
 
 echo
+echo "== 8) 浏览器级演练（需要 CDP :9222；没有则 SKIP）"
+if curl -s -m 3 http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
+  bfail=0
+  for sc in 400 timeout steps; do
+    out=$(SCENARIO=$sc timeout 140 node scripts/check-failure-reason.mjs 2>&1 | tail -1)
+    echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 失败原因($sc) $out"; }
+  done
+  out=$(timeout 140 node scripts/check-no-dup-stream.mjs 2>&1 | tail -1)
+  echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 不重复 $out"; }
+  out=$(timeout 140 node scripts/check-approval-truncation.mjs 2>&1 | tail -1)
+  echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 截断提示 $out"; }
+  if [ "$bfail" -eq 0 ]; then ok "浏览器级演练" "失败原因×3 / 不重复 / 截断提示 全绿"; else no "浏览器级演练" "$bfail 项失败"; fi
+else
+  skip "浏览器级演练" "无 CDP（:9222），跳过"
+fi
+
 echo "== 结论：pass=$pass fail=$fail skip=$skip"
 [ "$fail" -eq 0 ] || exit 1
 [ "$skip" -eq 0 ] || { echo "  注意：仍有 $skip 项 SKIP（未配置外部凭据），目标未完成"; exit 3; }
