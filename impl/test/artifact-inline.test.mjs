@@ -59,3 +59,34 @@ test('属性测试：MIME 表里任何"可执行/可带脚本"的类型都不允
   // 白名单自身也不许混入危险类型
   for (const t of INLINE_OK) assert.ok(!dangerous.test(t), `白名单混入了危险类型：${t}`)
 })
+
+test('属性测试：MIME 表里的每个扩展名，内联与否严格等于白名单判定（无例外）', async (t) => {
+  const { MIME, INLINE_OK } = await import('../src/server.mjs')
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { tmpdir } = await import('node:os')
+
+  const root = join(tmpdir(), `cube-mime-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  mkdirSync(root, { recursive: true })
+  process.env.WORKSPACE_ROOT = root
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  db.prepare('insert into runs (id,status,started_at,tenant_id,session_id) values (?,?,?,?,?)')
+    .run('r_mime', 'done', new Date().toISOString(), 't_a', 's_a1')
+  const dir = join(root, 'r_mime'); mkdirSync(dir, { recursive: true })
+  for (const ext of Object.keys(MIME)) writeFileSync(join(dir, `f${ext}`), 'x')
+  const app = createApp(db)
+  t.after(() => { app.close(); rmSync(root, { recursive: true, force: true }) })
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+
+  for (const [ext, mime] of Object.entries(MIME)) {
+    const raw = String(mime).split(';')[0].trim().toLowerCase()
+    const want = INLINE_OK.has(raw)
+    const r = await fetch(`${base}/api/artifacts/r_mime/f${ext}?inline=1`, { headers: { authorization: 'Bearer tok_a' } })
+    assert.equal(r.status, 200, `${ext} 应可读取`)
+    const disp = String(r.headers.get('content-disposition') ?? '')
+    assert.equal(disp.startsWith('inline'), want, `${ext}(${raw}) 期望 ${want ? 'inline' : 'attachment'}，实际: ${disp}`)
+  }
+})
