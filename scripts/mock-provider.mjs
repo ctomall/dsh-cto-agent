@@ -24,7 +24,11 @@ createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' })
       return res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }] }))
     }
-    if (call % 2 === 1) {
+    // 按对话内容判断轮次：还没有 tool 结果 → 先给 tool_call；有了 → 给最终文本
+    // （不能用请求计数：探针/重试都会打乱奇偶）
+    const msgs = (() => { try { return JSON.parse(body).messages ?? [] } catch { return [] } })()
+    const hasToolResult = msgs.some((m) => m.role === 'tool')
+    if (!hasToolResult) {
       sse(res, [
         { choices: [{ delta: { tool_calls: [{ index: 0, id: `call_${call}`, function: { name: 'fs.write', arguments: '{"path":"mock-report.md",' } }] } }] },
         { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"content":"# mock 产物"}' } }] } }] },

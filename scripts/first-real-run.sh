@@ -30,6 +30,14 @@ st=$(curl -s -m 10 -b "$JAR" -H "Authorization: Bearer $TOK_A" "$BASE/api/model/
 echo "$st" | grep -q '"real":true' || no "模型状态" "driver 非真实：$st（先 scripts/unblock.sh --model-key …）"
 ok "模型状态" "$(echo "$st" | head -c 80)"
 
+echo "== 1.5) 探针：driver 说 real 不等于 key 真的能用"
+pr=$(curl -s -m 25 -o /tmp/probe.json -w '%{http_code}' -b "$JAR" -H "Authorization: Bearer $TOK_A" -X POST "$BASE/api/model/probe")
+if [ "$pr" = 200 ] && grep -q '"ok":true' /tmp/probe.json; then
+  ok "模型探针" "$(head -c 90 /tmp/probe.json)"
+else
+  no "模型探针" "HTTP $pr · $(head -c 120 /tmp/probe.json)"
+fi
+
 echo "== 2) 下目标"
 SID=$(curl -s -m 10 -b "$JAR" -H "Authorization: Bearer $TOK_A" -H 'content-type: application/json' \
   -d '{"title":"真模型验收"}' "$BASE/api/sessions" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
