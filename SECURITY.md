@@ -60,3 +60,23 @@
 | 开放重定向 | 重定向目标均为固定路径（`/`、`/login`、`/?sid=…`） | 无外部 URL 注入点 |
 | CSRF | 非 GET 请求校验 `sec-fetch-site: same-origin` | 已有用例覆盖 |
 | 密钥泄漏 | `/api/settings` 断言不出现真实密钥**值**（非关键词） | 用例 + 生产抽查 0 命中 |
+
+## 边缘身份（Cloudflare Access）接入决策
+
+计划 ③ 要在 `cto.ila3.top` 前加 Cloudflare Access。接入时必须遵守一条**硬约束**：
+
+> **在没有 JWT 校验的情况下，绝不把 `Cf-Access-Authenticated-User-Email` / `Cf-Access-Jwt-Assertion` 当作身份。**
+
+原因：这两个头是普通 HTTP 头。只要源站可被直连（例如 IP 直连、或 CF 配置失误），
+任何人都能伪造一个邮箱获得权限。正确做法是二选一：
+
+1. **推荐**：源站只允许 Cloudflare 回源（防火墙只放行 CF 段 + `authenticated origin pull`），
+   并且仍然保留应用层口令门作为第二道防线；
+2. 若要信任身份头，必须**校验 `Cf-Access-Jwt-Assertion`**（拉 `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`
+   公钥验签 + 校验 `aud`），失败即拒绝。
+
+当前实现选择 **1**：应用层口令门继续生效，边缘头完全不参与鉴权。
+已用用例钉住：伪造这两个头请求 `/api/sessions`、`/api/overview`、`/api/settings` 一律 **401**，
+首页 `/` 仍 **302** 到登录；同时合法 Cookie 仍正常放行（避免把正常路径也挡了）。
+
+公网实测（同一时刻）：无 Cookie → `302 / 401`；带伪造 CF 头 → 仍 `302 / 401`。
