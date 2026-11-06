@@ -79,22 +79,32 @@ scripts/unblock.sh --model-key '<KEY>' --base-url <BASE_URL> --model <MODEL> --p
 
 **缺什么**：`CLOUDFLARE_API_TOKEN`（Access: Apps 编辑 + Zone: Rate Limit 编辑）、`CF_ACCOUNT_ID`、`CF_ZONE_ID`。
 
-**放行步骤**
+**放行步骤**（2026-11-06 修订：改为用 `unblock.sh` 一条命令，并把复验工具写进来）
 
 ```bash
-# 1) dry-run 看将要发什么（不触网）
+# 0) 确认前提：域名确实走 Cloudflare 代理（否则 Access 无处可挂）
+./scripts/check-cf-proxy.sh
+
+# 1) dry-run：只看将要发送的三份 payload 是否形状正确（不触网）
 ALLOW_EMAILS=you@example.com scripts/cf-access-setup.sh --dry-run
 
-# 2) 真正创建（Access 应用 + 邮箱策略 + 边缘限流）
-CLOUDFLARE_API_TOKEN=... CF_ACCOUNT_ID=... CF_ZONE_ID=... \
-ALLOW_EMAILS=you@example.com scripts/cf-access-setup.sh
+# 2) 一条命令：校验 token → 建 Access 应用 → 挂邮箱 allow 策略 → 写边缘限流 → 落 cf.env(0600)
+scripts/unblock.sh --cf-token <TOKEN> --cf-account <ACCOUNT_ID> --cf-zone <ZONE_ID> --allow-emails you@example.com
 
-# 3) 验收：未登录浏览器应被 CF 拦截并跳转登录页
-curl -s -o /dev/null -w '%{http_code}\n' https://cto.ila3.top/        # 期望 302 → CF Access
-./scripts/acceptance.sh --require-all                                  # ③ 必须无 SKIP
+# 3) 复验（两种粒度，按需选）
+EDGE_ONLY=1 ./scripts/check-cf-edge.sh          # 只验边缘行为：未授权 302→cloudflareaccess.com、升级接口被拒
+CF_API_ONLY=1 ./scripts/check-cf-edge.sh        # 只验 API 侧：应用存在 / 策略 allow / 邮箱白名单 / 限流规则
+./scripts/check-cf-proxy.sh                     # 代理前置仍在
+
+# 4) 应用侧回归（③ 段必须全绿；注意此时 ① 若仍 SKIP，不要用 --require-all）
+./scripts/acceptance.sh | sed -n '/== ③/,/== ④/p'
 ```
 
-**验收判据**：未授权访问被 CF 拦截；授权后可正常访问页面与 API；`/api/admin/upgrade` 仅授权主体可达（已有 token + IP 白名单双保险）。
+**边缘预期配置**（由 `cf-access-setup.sh` 写入）：
+
+- Access 应用：`self_hosted`，`domain=cto.ila3.top`，未授权 **302 → cloudflareaccess.com**
+- 策略：`allow` + 邮箱白名单（`ALLOW_EMAILS`）
+- 边缘限流：`http_ratelimit` ruleset，表达式命中 `/api/*`，**每 IP 120 次/分钟**，超出 `block` 60s
 
 **回滚**：Cloudflare 后台删除对应 Access 应用；或 `DELETE /accounts/{id}/access/apps/{app_id}`。应用层门（`APP_PASSWORD`）仍在，删掉 CF Access 不会导致全裸。
 
