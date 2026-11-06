@@ -350,9 +350,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     // —— 产物下载/预览：租户校验 + 工作区路径约束（浏览器 <a> 带不了 header，故允许 ?token=）——
     const art = /^\/api\/artifacts\/([^/]+)\/(.+)$/.exec(url.pathname)
     if (req.method === 'GET' && art) {
+      // 三种身份来源：Authorization 头、?token=（浏览器 <a> 带不了头）、以及口令门的 Cookie。
+      // 少了 Cookie 这条路，公网页面（Cookie 模式）点预览/下载会直接 401。
       const bearer = req.headers.authorization ?? `Bearer ${url.searchParams.get('token') ?? ''}`
-      const ctx = resolveContext(bearer)
-      if (ctx.error) return reply(res, ctx.error)
+      let ctx = resolveContext(bearer)
+      if (ctx.error) ctx = ctxOf(req)
+      if (ctx.error) return reply(res, json(401, { error: 'unauthenticated' }))
 
       const runId = decodeURIComponent(art[1])
       const rel = decodeURIComponent(art[2])
