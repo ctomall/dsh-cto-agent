@@ -81,6 +81,8 @@ if curl -s -m 3 http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 慢模型端到端 $out"; }
   out=$(timeout 200 node scripts/check-streaming-deltas.mjs 2>&1 | tail -1)
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 流式渐进渲染 $out"; }
+  out=$(timeout 160 node scripts/check-empty-answer-note.mjs 2>&1 | tail -1)
+  echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 空正文提示 $out"; }
   if [ "$bfail" -eq 0 ]; then ok "浏览器级演练" "失败原因×3 / 不重复 / 截断提示 全绿"; else no "浏览器级演练" "$bfail 项失败"; fi
 else
   skip "浏览器级演练" "无 CDP（:9222），跳过"

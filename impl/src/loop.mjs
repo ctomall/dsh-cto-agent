@@ -108,6 +108,8 @@ export class AgentLoop {
       this.rc.emitTo(runId, 'run.finished', {
         runId,
         ok: true,
+        // 模型最终文本长度（不含"收到目标"回显）：前端据此判断"这次有没有正文"
+        textChars: String(decision.text ?? '').length,
         ...(truncated ? { truncated: true } : {}),
         ...(this.usage ? { usage: this.usage } : {}),
       })

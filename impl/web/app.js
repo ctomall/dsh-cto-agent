@@ -264,6 +264,7 @@ function handleEvent(type, p) {
     // 每轮一个助手块：否则第二轮文本会追加到第一轮的节点上（实测会粘成一段）
     state.assistant = null
   } else if (type === 'text.delta') {
+    state.sawText = true
     ensureAssistant().textContent += p.text
   } else if (type === 'tool.started') {
     if (p.args) state.toolArgs.set(p.callId, p.args)
@@ -290,9 +291,17 @@ function handleEvent(type, p) {
     setToolState(p.callId, p.ok ? 'ok' : 'error', p.ok ? '完成' : p.error === 'denied_by_policy' ? '已拒绝' : '失败')
     setStatus(p.ok ? '执行完成' : '执行失败', 'running')
   } else if (type === 'artifact.created') {
+    state.sawArtifact = true
     artifactCard(p)
   } else if (type === 'run.finished') {
     state.inflight = false
+    // 推理型模型可能只输出思考、没有正文：不能只显示"完成"就完事
+    const textChars = Number(p?.textChars)
+    const noAnswer = Number.isFinite(textChars) ? textChars === 0 : !state.sawText
+    if (noAnswer && !state.sawArtifact) {
+      const note = el('p', 'muted', '模型这次没有返回正文（可能只输出了思考内容）。可以再问一次，或让它直接给出结论。')
+      streamInner().append(note)
+    }
     setStatus('完成', 'done')
     state.es?.close()
   } else if (type === 'run.canceled') {
@@ -376,6 +385,8 @@ async function send(text) {
   state.decided = false
   $('#input').value = ''
   state.inflight = true
+  state.sawText = false
+  state.sawArtifact = false
   setStatus('已提交', 'running')
   const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
   if (status === 429) { state.inflight = false; setStatus(rateLimitedText(body, '发送'), 'error'); return }
