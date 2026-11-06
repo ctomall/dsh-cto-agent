@@ -111,6 +111,18 @@ function renderPending(d) {
   $('#topBadge').textContent = n
 }
 
+// token 用量：接上真模型后这是运营最关心的数字（成本）
+async function loadUsage() {
+  const el = document.querySelector('#usage')
+  if (!el) return
+  try {
+    const r = await fetch('/api/usage?days=7', { headers: token ? { authorization: `Bearer ${token}` } : {} })
+    if (r.status !== 200) { el.textContent = '用量 -'; return }
+    const u = await r.json()
+    el.textContent = `近 ${u.days} 天 · ${u.runs} 次运行 · ${u.tokens.total} tokens`
+  } catch { el.textContent = '用量 -' }
+}
+
 function renderStatus(d) {
   const now = new Date()
   $('#sub').textContent = `运行 ${d.counts.runsTotal} 次 · 刷新 ${now.toTimeString().slice(0, 8)}`
@@ -155,6 +167,7 @@ async function load() {
   renderAudit(d)
   renderPending(d)
   renderStatus(d)
+  loadUsage()
 }
 
 $('#refresh').addEventListener('click', load)

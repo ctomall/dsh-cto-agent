@@ -465,6 +465,32 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { audit: items, limit }))
     }
 
+    // —— token 用量：从 run.finished 事件聚合（租户内，可按天窗口）——
+    if (req.method === 'GET' && url.pathname === '/api/usage') {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const daysRaw = Number(url.searchParams.get('days') ?? 7)
+      const days = Math.min(Math.max(Number.isFinite(daysRaw) ? Math.trunc(daysRaw) : 7, 1), 90)
+      const since = new Date(Date.now() - days * 86_400_000).toISOString()
+      const row = db
+        .prepare(
+          `select
+             count(*) as runs,
+             coalesce(sum(json_extract(e.payload_json,'$.usage.prompt_tokens')), 0) as prompt,
+             coalesce(sum(json_extract(e.payload_json,'$.usage.completion_tokens')), 0) as completion,
+             coalesce(sum(json_extract(e.payload_json,'$.usage.total_tokens')), 0) as total
+           from events e join runs r on r.id = e.run_id
+           where e.type = 'run.finished' and r.tenant_id = ? and e.ts >= ?`,
+        )
+        .get(ctx.tenantId, since)
+      return reply(res, json(200, {
+        days,
+        since,
+        runs: Number(row.runs ?? 0),
+        tokens: { prompt: Number(row.prompt ?? 0), completion: Number(row.completion ?? 0), total: Number(row.total ?? 0) },
+      }))
+    }
+
     // —— 模型连通性探针：接上 key 之后，从界面上先"试一句"再跑真任务 ——
     if (req.method === 'POST' && url.pathname === '/api/model/probe') {
       const ctx = ctxOf(req)
