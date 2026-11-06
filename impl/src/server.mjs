@@ -893,10 +893,23 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       let tool = null
       try { tool = JSON.parse(pendingEv?.payload_json ?? '{}').action ?? null } catch {}
       metrics.inc('approvals_total', { decision })
-      const out = await loop.resume({ runId, decision })
+      // 与创建 run 同理：恢复后模型还要再跑一步（真模型几十秒），
+      // 审批请求不能等它——先记审计并回 200，恢复在后台继续。
       db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
         .run(ctx.tenantId, ctx.userId, 'approval_decided', JSON.stringify({ runId, decision, tool }), new Date().toISOString())
-      return reply(res, json(200, { ...out, decision }))
+      const resumed = loop.resume({ runId, decision })
+      resumed.catch((e) => console.error(`[cube-agent] run ${runId} 恢复失败：`, e?.message ?? e))
+      // 注意：不能用 numEnv —— 它把 0 当成"未设置"。这里 0 是合法值（= 不等）。
+      const rawWait = process.env.RUN_TRANSITION_WAIT_MS ?? process.env.RUN_CREATE_WAIT_MS ?? ''
+      const waitMs = rawWait !== '' && Number.isFinite(Number(rawWait)) ? Math.max(0, Math.trunc(Number(rawWait))) : 0
+      if (waitMs > 0) {
+        const out = await Promise.race([
+          resumed.catch(() => ({ status: 'failed' })),
+          new Promise((r) => setTimeout(() => r({ status: 'accepted' }), waitMs)),
+        ])
+        return reply(res, json(200, { ...out, decision }))
+      }
+      return reply(res, json(200, { status: 'accepted', decision }))
     }
 
     // —— 升级 ——

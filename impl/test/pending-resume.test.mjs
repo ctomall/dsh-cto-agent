@@ -4,6 +4,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+// 审批恢复默认后台进行；这些用例需要确定性状态
+process.env.RUN_TRANSITION_WAIT_MS = process.env.RUN_TRANSITION_WAIT_MS ?? '8000'
+
 // 用文件库，模拟"进程重启"：同一个 DB 上先后创建两个 app 实例
 async function makeApp(db) {
   const { createApp } = await import('../src/server.mjs')
