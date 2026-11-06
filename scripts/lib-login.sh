@@ -14,3 +14,15 @@ login_cookie() {
   printf '%s' "$code"
   return 1
 }
+
+# 严格版：拿不到会话就失败退出（避免后续请求全部 401、却只报"未认证"）
+# 用法：require_login <base> <jar> <password> [max_attempts] [sleep_s]
+require_login() {
+  local base="$1" jar="$2" pw="$3" max="${4:-6}" nap="${5:-15}" code
+  code=$(login_cookie "$base" "$jar" "$pw" "$max" "$nap")
+  case "$code" in
+    302) printf '302'; return 0 ;;
+    401) printf '401'; return 0 ;; # 未开口令门的实例
+    *)   printf '%s' "$code"; return 1 ;;
+  esac
+}

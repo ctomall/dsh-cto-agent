@@ -22,7 +22,7 @@ fi
 JAR=$(mktemp); IDS=$(mktemp); trap 'rm -f "$JAR" "$IDS"' EXIT
 H=(-b "$JAR" -H "Authorization: Bearer $TOK" -H 'content-type: application/json')
 
-lc=$(login_cookie "$BASE" "$JAR" "$PW")
+lc=$(require_login "$BASE" "$JAR" "$PW") || { no "登录" "重试后仍无法建立会话（$lc）"; exit 1; }
 case "$lc" in
   302) ok "登录" 302 ;;
   401) ok "登录" "该实例未开启口令门（401），跳过" ;;

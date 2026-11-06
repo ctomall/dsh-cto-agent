@@ -43,7 +43,7 @@ echo "== 3) 登录后放行"
 if [ -f "$PW_FILE" ]; then
   PW=$(cut -d= -f2- "$PW_FILE")
   jar=$(mktemp)
-  lc=$(login_cookie "$BASE" "$jar" "$PW")
+  lc=$(require_login "$BASE" "$jar" "$PW") || lc="000"
   [ "$lc" = "302" ] && ok "登录提交" "302" || no "登录提交" "期望 302，实际 $lc"
   pc=$(code2 -b "$jar" "$BASE/")
   [ "$pc" = "200" ] && ok "带 Cookie 首页" "200" || no "带 Cookie 首页" "期望 200，实际 $pc（隧道慢时可能 000）"

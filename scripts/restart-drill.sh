@@ -25,7 +25,7 @@ fi
 JAR=$(mktemp); trap 'rm -f "$JAR"' EXIT
 H=(-b "$JAR" -H "Authorization: Bearer $TOK" -H 'content-type: application/json')
 
-lc=$(login_cookie "$BASE" "$JAR" "$PW")
+lc=$(require_login "$BASE" "$JAR" "$PW") || { no "登录" "重试后仍无法建立会话（$lc）"; exit 1; }
 [ "$lc" = 302 ] && ok "登录" 302 || no "登录" "期望 302，实际 $lc"
 
 SID=$(curl -s -m 15 "${H[@]}" -d '{"title":"重启演练"}' "$BASE/api/sessions" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))')
