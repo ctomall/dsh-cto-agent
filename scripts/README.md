@@ -32,6 +32,7 @@
 | `check-boot-hang.mjs` | 浏览器级验证：boot 中某一步"卡住不返回"时，页面仍必须完成绑定（筛选可用）。 |
 | `check-boot-resilience.mjs` | 浏览器级验证：boot 期间某个接口失败（模拟丢包），页面仍必须渲染会话列表。 |
 | `check-cf-edge.sh` | ③ 的边缘验收（需要 Cloudflare 凭据）。**注意：本脚本尚未用真实凭据运行过**—— |
+| `check-cf-proxy.sh` | ③ 的前置条件检查：域名必须先被 Cloudflare 代理（橙云），否则 Access / 边缘限流都无从谈起。 |
 | `check-double-submit.mjs` | 浏览器级验证：连按两次发送，只能创建一个 run（真模型下每次都计费）。 |
 | `check-empty-answer-note.mjs` | 浏览器级验证：模型只输出思考、没有正文时，界面必须给出说明（而不是只显示"完成"）。 |
 | `check-failure-reason.mjs` | 浏览器级验证：三类失败都要在界面上给出原因（状态栏 + 失败卡片）。 |
