@@ -119,7 +119,14 @@ export function handleRequest(db, req, resolveCtx = (r) => resolveContext(r.head
   return json(404, { error: 'not_found' })
 }
 
-const MIME = {
+// 内联白名单：只放"渲染了也不会执行脚本"的类型。
+// 注意：这是**权限决定**，不是 UI 细节——加任何一项都要过 agent/inline 的属性测试。
+export const INLINE_OK = new Set([
+  'text/plain', 'text/markdown', 'application/json',
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf',
+])
+
+export const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -359,10 +366,6 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         const buf = await readFile(abs)
         const rawType = MIME[extname(abs)] ?? 'application/octet-stream'
         // 只有"渲染了也不会执行脚本"的类型才允许内联；html/svg 一律强制下载
-        const INLINE_OK = new Set([
-          'text/plain', 'text/markdown', 'application/json',
-          'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf',
-        ])
         const baseType = rawType.split(';')[0].trim().toLowerCase()
         const wantInline = url.searchParams.get('inline') === '1' && INLINE_OK.has(baseType)
         const type =

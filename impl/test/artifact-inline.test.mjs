@@ -46,3 +46,16 @@ test('预览只内联安全类型；html/svg 永远强制下载', async (t) => {
   const noFlag = await get('/api/artifacts/r_art/note.md')
   assert.match(String(noFlag.headers.get('content-disposition')), /^attachment/, '不带 inline 参数一律下载')
 })
+
+test('属性测试：MIME 表里任何"可执行/可带脚本"的类型都不允许内联', async () => {
+  const { MIME, INLINE_OK } = await import('../src/server.mjs')
+  const dangerous = /^(text\/html|application\/xhtml|image\/svg|application\/xml|text\/xml|application\/mhtml|multipart\/related|text\/javascript|application\/javascript)/
+  for (const [ext, mime] of Object.entries(MIME)) {
+    const base = String(mime).split(';')[0].trim().toLowerCase()
+    if (dangerous.test(base)) {
+      assert.ok(!INLINE_OK.has(base), `${ext}(${base}) 不允许出现在内联白名单里`)
+    }
+  }
+  // 白名单自身也不许混入危险类型
+  for (const t of INLINE_OK) assert.ok(!dangerous.test(t), `白名单混入了危险类型：${t}`)
+})
