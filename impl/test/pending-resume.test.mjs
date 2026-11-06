@@ -54,3 +54,27 @@ test('没有快照的遗留 run 仍会被收敛为 failed', async (t) => {
   t.after(() => app.close())
   assert.equal(db.prepare('select status from runs where id = ?').get('r_nosnap').status, 'failed')
 })
+
+test('取消待审批的 run：快照被清理，之后再审批返回 already_terminal 而不是 500', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+
+  const { id: sid } = await (await fetch(`${base}/api/sessions`, { method: 'POST', headers: H, body: JSON.stringify({ title: '取消清快照' }) })).json()
+  const { runId } = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '写一份报告', sessionId: sid }) })).json()
+  await new Promise((r) => setTimeout(r, 200))
+  assert.equal(db.prepare('select count(*) c from run_pending where run_id = ?').get(runId).c, 1, '挂起时应有快照')
+
+  const cn = await (await fetch(`${base}/api/runs/${runId}/cancel`, { method: 'POST', headers: H })).json()
+  assert.equal(cn.status, 'canceled')
+  assert.equal(db.prepare('select count(*) c from run_pending where run_id = ?').get(runId).c, 0, '取消后快照必须清理')
+
+  const ap = await fetch(`${base}/api/approvals/${runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'allow_once' }) })
+  assert.equal(ap.status, 200, '再审批不应 500')
+  assert.equal((await ap.json()).note, 'already_terminal')
+})

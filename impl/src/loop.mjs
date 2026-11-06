@@ -149,12 +149,21 @@ export class AgentLoop {
     }
     this.rc.transition(runId, 'canceled')
     this.rc.emitTo(runId, 'run.canceled', { runId })
+    this.pending.delete(runId)
+    this.pendingStore?.clear(runId)
     return { status: 'canceled' }
   }
 
   async resume({ runId, decision }) {
+    const status = this.rc.status(runId)
+    if (status && TERMINAL.has(status)) {
+      // 已经结束的 run 不该再被"批准"：顺手清掉可能残留的快照
+      this.pending.delete(runId)
+      this.pendingStore?.clear(runId)
+      return { status, note: 'already_terminal' }
+    }
     const p = this.pending.get(runId) ?? this.pendingStore?.load(runId) ?? null
-    if (!p) return { status: this.rc.status(runId), note: 'no_pending_approval' }
+    if (!p) return { status, note: 'no_pending_approval' }
     this.rc.emitTo(runId, 'approval.decided', { callId: p.callId, decision })
     this.pending.delete(runId)
     this.pendingStore?.clear(runId)
