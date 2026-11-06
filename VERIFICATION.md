@@ -17,7 +17,7 @@
 ✔ secret-scan        pass=6 fail=0
 ✔ a11y-contrast      全部达标
 ✔ ratelimit-check    pass=4 fail=0
-○ acceptance         pass=19 fail=0 skip=2（有 SKIP）
+○ acceptance         pass=20 fail=0 skip=2（有 SKIP）
 == 结论：pass=4 fail=0 skip=1 → 目标未完成
 ```
 
@@ -48,7 +48,7 @@ PW= TOK=tok_a ./scripts/first-real-run.sh http://127.0.0.1:8797
 接上真 key 后：
 
 ```bash
-scripts/unblock.sh --model-key sk-... --probe   # 写盘 + 重启 + 自检
+scripts/unblock.sh --model-key sk-... --verify   # 写盘 + 重启 + 探针 + 端到端
 ./scripts/first-real-run.sh                     # 真实链路（driver 必须 real）
 ./scripts/acceptance.sh --require-all           # 必须 exit 0
 ```
@@ -87,7 +87,7 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 
 ## 当前结论（2026-11-06）
 
-<!-- acceptance: pass=19 fail=0 skip=2 -->
+<!-- acceptance: pass=20 fail=0 skip=2 -->
 
 | 计划 | 状态 | 差距 |
 |---|---|---|

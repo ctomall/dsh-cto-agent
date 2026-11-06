@@ -9,7 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 ENV_FILE=/etc/cube-agent/env
 KEY_FILE=/etc/cube-agent/model.key
-BASE_URL=""; MODEL=""; PROBE=0; CHECK=0
+BASE_URL=""; MODEL=""; PROBE=0; CHECK=0; VERIFY=0
 MODEL_KEY=""; CF_TOKEN=""; CF_ACCOUNT=""; CF_ZONE=""; EMAILS=""
 
 while [ $# -gt 0 ]; do
@@ -19,6 +19,7 @@ while [ $# -gt 0 ]; do
     --base-url) BASE_URL="$2"; shift ;;
     --model) MODEL="$2"; shift ;;
     --probe) PROBE=1 ;;
+    --verify) VERIFY=1 ;;
     --cf-token) CF_TOKEN="$2"; shift ;;
     --cf-account) CF_ACCOUNT="$2"; shift ;;
     --cf-zone) CF_ZONE="$2"; shift ;;
@@ -38,6 +39,7 @@ status() {
   echo
   echo "== 复验命令（--check 不跑，避免占用登录限流）"
   echo "   ./scripts/acceptance.sh http://127.0.0.1:8787"
+  echo "   接入 key 后想一次跑通端到端：scripts/unblock.sh --model-key <k> --verify"
 }
 
 if [ "$CHECK" = 1 ] || { [ -z "$MODEL_KEY" ] && [ -z "$CF_TOKEN" ]; }; then
@@ -67,6 +69,10 @@ if [ -n "$MODEL_KEY" ]; then
   for i in $(seq 1 30); do sleep 1; curl -s -o /dev/null -m 3 http://127.0.0.1:8787/healthz && break; done
   echo "== model/status:"; node scripts/model-doctor.mjs || true
   if [ "$PROBE" = 1 ]; then echo "== 真实探测（会消耗一次调用）"; node scripts/model-doctor.mjs --probe || exit 3; fi
+  if [ "$VERIFY" = 1 ]; then
+    echo "== 端到端：目标 → 模型选工具 → 审批 → 产出"
+    scripts/first-real-run.sh http://127.0.0.1:8787 || { echo "FAIL: 端到端未通过（看上面哪一步红的）" >&2; exit 5; }
+  fi
 fi
 
 if [ -n "$CF_TOKEN" ]; then
