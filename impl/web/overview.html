@@ -7,73 +7,74 @@
 <link rel="stylesheet" href="/overview.css" />
 </head>
 <body>
-<div class="app">
-  <nav class="rail">
-    <div class="brand">cube<span>·agent</span></div>
-    <div class="rail-group">
-      <div class="rail-label">工作区</div>
-      <a class="rail-item" id="to-workbench" href="/">工作台</a>
-      <a class="rail-item active" href="/overview">总览</a>
+<div class="frame" id="frame" data-rail="expanded">
+  <aside class="rail">
+    <div class="rail-head">
+      <span class="brand">cube<span>·agent</span></span>
+      <button class="icon-btn" id="toggleRail" title="收起侧栏" aria-label="收起侧栏">‹</button>
     </div>
+    <nav class="nav">
+      <a class="nav-item" href="/" title="工作台"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">工作台</span></a>
+      <a class="nav-item active" href="/overview" title="总览"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></svg><span class="lbl">总览</span></a>
+    </nav>
     <div class="rail-foot">
-      <span id="build">-</span>
-      <span id="tenant">-</span>
+      <button class="nav-item as-btn" id="openPanel" title="待审批">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2.5 2.5L16 9"/><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10"/></svg><span class="lbl">待审批</span><span class="badge" id="railBadge">0</span>
+      </button>
     </div>
-  </nav>
+  </aside>
 
   <main class="main">
-    <header class="page-head">
-      <div>
+    <header class="topbar">
+      <div class="crumbs">
         <h1>总览</h1>
-        <p class="sub" id="sub">—</p>
+        <span class="sep">·</span>
+        <span class="muted" id="sub">—</span>
       </div>
-      <div class="head-actions">
+      <div class="actions">
         <span class="pill" id="driver"><i class="dot"></i><span>模型 -</span></span>
-        <button class="btn" id="refresh" type="button">刷新</button>
+        <button class="btn" id="refresh">刷新</button>
+        <button class="btn" id="openPanelTop">待审批 <span id="topBadge">0</span></button>
       </div>
     </header>
 
-    <div class="grid">
-      <section class="card card-layers">
-        <div class="card-head">
-          <h2>分层</h2>
-          <span class="meta" id="layers-meta">L0–L5</span>
-        </div>
-        <div class="rows" id="layers"></div>
-      </section>
+    <div class="scroll">
+      <div class="content">
+        <section class="block">
+          <div class="block-head"><h2>分层</h2><span class="meta" id="layers-meta">L0–L5</span></div>
+          <div class="list" id="layers"></div>
+        </section>
 
-      <section class="card card-gaps">
-        <div class="card-head">
-          <h2>文档有 · 代码无</h2>
-          <span class="meta" id="gaps-meta">4 处</span>
-        </div>
-        <div class="rows" id="gaps"></div>
-        <p class="foot-note">依据 CONFORMANCE.md 对账结果</p>
-      </section>
+        <section class="block">
+          <div class="block-head"><h2>文档有 · 代码无</h2><span class="meta" id="gaps-meta"></span></div>
+          <div class="list" id="gaps"></div>
+          <p class="note">依据 CONFORMANCE.md 对账结果</p>
+        </section>
 
-      <section class="card card-activity">
-        <div class="card-head">
-          <h2>活动记录</h2>
-          <span class="meta" id="audit-count">0 条</span>
-        </div>
-        <div class="rows" id="audit"></div>
-      </section>
+        <section class="block">
+          <div class="block-head"><h2>活动记录</h2><span class="meta" id="audit-count"></span></div>
+          <div class="list" id="audit"></div>
+        </section>
+      </div>
     </div>
   </main>
 
-  <aside class="side">
-    <section class="side-block">
-      <div class="side-head">
-        <h2>待审批</h2>
-        <span class="meta" id="pending-count">0 条</span>
-      </div>
-      <div class="side-rows" id="pending"></div>
-    </section>
-    <section class="side-block">
-      <div class="side-head"><h2>本租户</h2></div>
-      <dl class="kv" id="tenant-kv"></dl>
-    </section>
+  <aside class="panel" id="panel" hidden>
+    <header class="panel-head">
+      <h2>待审批</h2>
+      <span class="meta" id="pending-count">0 条</span>
+      <button class="icon-btn" id="closePanel" aria-label="关闭">×</button>
+    </header>
+    <div class="panel-body" id="pending"></div>
   </aside>
+
+  <footer class="statusbar">
+    <span id="sbDriver">模型 -</span>
+    <span class="spacer"></span>
+    <span id="sbBuild">build -</span>
+    <span id="sbTenant">tenant -</span>
+    <span id="sbTime">-</span>
+  </footer>
 </div>
 <script src="/overview.js"></script>
 </body>
