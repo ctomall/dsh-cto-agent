@@ -17,3 +17,17 @@ test('脚本不得同时解析 --flag 且把 $1 直接当位置参数', () => {
   }
   assert.deepEqual(offenders, [], `这些脚本可能把 flag 当位置参数：${offenders.join(', ')}`)
 })
+
+// 同一类问题在 node 脚本里也要防：既用 process.argv[2] 当位置参数，又解析 --flag。
+test('node 脚本不得同时用 process.argv[2] 当位置参数且解析 --flag', () => {
+  const dir = 'scripts'
+  const offenders = []
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.mjs')) continue
+    const src = readFileSync(`${dir}/${f}`, 'utf8')
+    const positional = /process\.argv\[2\]/.test(src)
+    const flags = /process\.argv\.includes\(['"]--|argv\.indexOf\(['"]--/.test(src)
+    if (positional && flags) offenders.push(f)
+  }
+  assert.deepEqual(offenders, [], `这些 node 脚本可能把 flag 当位置参数：${offenders.join(', ')}`)
+})
