@@ -81,5 +81,37 @@ assert s.count(old)==1
 io.open(p,'w',encoding='utf-8').write(s.replace(old,'',1))
 "
 
+run_mut "产物列表忽略租户过滤" impl/src/server.mjs "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old=\"where e.type = 'artifact.created' and r.tenant_id = ?\"
+assert s.count(old)==1
+io.open(p,'w',encoding='utf-8').write(s.replace(old,\"where e.type = 'artifact.created' and (r.tenant_id = ? or 1=1)\",1))
+"
+
+run_mut "会话列表忽略租户过滤" impl/src/server.mjs "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old=\"prepare('select id, title from sessions where tenant_id = ? order by id')\"
+assert s.count(old)==1
+io.open(p,'w',encoding='utf-8').write(s.replace(old,\"prepare('select id, title from sessions where (tenant_id = ? or 1=1) order by id')\",1))
+"
+
+run_mut "限流窗口永不生效" impl/src/ratelimit.mjs "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old='const live = prev.filter((t) => now - t < windowMs)'
+assert s.count(old)==1
+io.open(p,'w',encoding='utf-8').write(s.replace(old,'const live = []',1))
+"
+
+run_mut "把 /api/sessions 加进公开集" impl/src/server.mjs "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old=\"|| url.pathname === '/healthz'\"
+assert s.count(old)==1
+io.open(p,'w',encoding='utf-8').write(s.replace(old,\"|| url.pathname === '/healthz' || url.pathname === '/api/sessions'\",1))
+"
+
 echo "== 汇总：有效(变红)=$ok 无效(仍绿)=$bad"
 [ "$bad" -eq 0 ] || exit 1
