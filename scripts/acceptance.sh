@@ -84,6 +84,14 @@ echo "== ③ 访问控制与限流"
 [ "$(code "$BASE/")" = 302 ] && ok "未登录首页" "302" || no "未登录首页" "期望 302"
 [ "$(code "$BASE/api/sessions")" = 401 ] && ok "未登录 API" "401" || no "未登录 API" "期望 401"
 [ "$(code -b "$JAR" "$BASE/")" = 200 ] && ok "已登录首页" "200" || no "已登录首页" "期望 200"
+# Cookie 会话必须能直接调用 API（"登录后页面可用"的关键；只看 curl 会漏掉）
+me_cookie=$(code -b "$JAR" "$BASE/api/me")
+[ "$me_cookie" = 200 ] && ok "Cookie 直接调 API" "200（无需 Bearer）" || no "Cookie 直接调 API" "期望 200，实际 $me_cookie"
+
+# 跨站变更请求必须被挡（Cookie 身份下的 CSRF 防护）
+csrf=$(code -b "$JAR" -H 'content-type: application/json' -H 'sec-fetch-site: cross-site' -d '{}' -X POST "$BASE/api/sessions")
+[ "$csrf" = 403 ] && ok "跨站写请求被拒" "403" || no "跨站写请求被拒" "期望 403，实际 $csrf"
+
 up=$(code -X POST -H "x-upgrade-token: wrong" "$BASE/api/admin/upgrade")
 { [ "$up" = 401 ] || [ "$up" = 403 ] || [ "$up" = 503 ] || [ "$up" = 429 ]; } && ok "升级接口需凭据" "$up" || no "升级接口需凭据" "$up"
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CF_ACCOUNT_ID:-}" ]; then

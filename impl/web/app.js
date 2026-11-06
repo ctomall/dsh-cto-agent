@@ -300,6 +300,13 @@ async function boot() {
   ul.textContent = ''
   for (const s of body.sessions || []) {
     const li = el('li', s.id === state.sessionId ? 'active' : '', s.title)
+    // 点会话即切换（?sid= 保留；有声明的 token 时一并带上）
+    li.addEventListener('click', () => {
+      const u = new URL(location.href)
+      u.searchParams.set('sid', s.id)
+      if (!token) u.searchParams.delete('token')
+      location.href = u.toString()
+    })
     ul.append(li)
   }
 
