@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 const work = mkdtempSync(join(tmpdir(), 'sbs-'))
 const APP_PORT = 8902
@@ -42,6 +43,8 @@ await new Promise((r) => ws.addEventListener('open', r, { once: true }))
 const ev = async (x) => (await raw('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true })).result?.value
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 await raw('Runtime.enable'); await raw('Page.enable'); await raw('Fetch.enable', { patterns: [{ urlPattern: '*/api/sessions*' }] })
+// 记录提交前已有会话，事后用差异定位（id 是随机串，靠顺序猜不稳）
+const beforeIds = new Set(((await (await fetch(`http://127.0.0.1:${APP_PORT}/api/sessions`, { headers: { authorization: 'Bearer tok_a' } })).json()).sessions ?? []).map((x) => x.id))
 await raw('Page.navigate', { url: `http://127.0.0.1:${APP_PORT}/?token=tok_a` }, 25000)
 await sleep(800) // 列表还在挂着，此时提交
 const submitted = await ev(`(() => {
@@ -50,13 +53,20 @@ const submitted = await ev(`(() => {
   i.value = '慢列表下立刻发送'; f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   return 'ok'
 })()`)
-await sleep(6000)
-const runs = await (await fetch(`http://127.0.0.1:${APP_PORT}/api/sessions`, { headers: { authorization: 'Bearer tok_a' } })).json()
-const last = runs.sessions.at(-1)
-const msgCount = last ? (await (await fetch(`http://127.0.0.1:${APP_PORT}/api/sessions/${last.id}/messages`, { headers: { authorization: 'Bearer tok_a' } })).json()).messages?.length ?? 0 : 0
+// 断言语义：提交必须真的建出一条 run 并跑完，而不是"提交失败"
+const db = new DatabaseSync(join(work, 'cube.db'))
+let runCount = 0
+for (let i = 0; i < 60; i++) {
+  await new Promise((r) => setTimeout(r, 300))
+  runCount = Number(db.prepare('select count(*) c from runs').get().c)
+  if (runCount >= 1) {
+    const st = db.prepare('select status from runs order by started_at desc limit 1').get()?.status
+    if (st === 'done' || st === 'failed') break
+  }
+}
 const status = await ev(`document.querySelector('#runlabel')?.textContent ?? ''`)
-const ok = submitted === 'ok' && !!last && msgCount > 0 && !String(status).includes('无法创建会话')
-console.log(JSON.stringify({ submitted, heldList, session: last?.id ?? null, msgCount, status, ok }))
+const ok = submitted === 'ok' && runCount >= 1 && !String(status).includes('提交失败') && !String(status).includes('无法创建会话')
+console.log(JSON.stringify({ submitted, heldList, runCount, status, ok }))
 await raw('Fetch.disable').catch(() => {})
 await raw('Page.close', {}, 3000).catch(() => {})
 ws.close()

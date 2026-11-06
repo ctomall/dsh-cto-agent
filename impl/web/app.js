@@ -356,13 +356,15 @@ function subscribe(runId, { lastEventId = 0 } = {}) {
 async function send(text) {
   if (!text.trim()) return
   // 防重复提交：连按两次回车会创建两个 run（真模型下就是两笔计费），
-  // 而界面上只订阅得到后一个，前一个会无人看管地跑完
+  // 而界面上只订阅得到后一个，前一个会无人看管地跑完。
+  // 关键：必须在**任何 await 之前**置位，否则两次提交都能通过检查（v192 引入的 race）
   if (state.inflight) { setStatus('上一条还在运行，等它结束再发送', 'waiting'); return }
+  state.inflight = true
   // 会话可能还没加载出来（boot 慢、或刚打开页面就提交）：
   // 此时不能带着 undefined 去创建 run，否则用户只会看到"提交失败"
   if (!state.sessionId) {
     const made = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ title: '新会话' }) })
-    if (made.status !== 200 && made.status !== 201) { setStatus('无法创建会话，请刷新重试', 'error'); return }
+    if (made.status !== 200 && made.status !== 201) { state.inflight = false; setStatus('无法创建会话，请刷新重试', 'error'); return }
     state.sessionId = made.body.id
     history.replaceState(null, '', `/?sid=${encodeURIComponent(state.sessionId)}`)
   }
@@ -384,7 +386,6 @@ async function send(text) {
   state.assistant = null
   state.decided = false
   $('#input').value = ''
-  state.inflight = true
   state.sawText = false
   state.sawArtifact = false
   setStatus('已提交', 'running')
