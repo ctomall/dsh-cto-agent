@@ -46,8 +46,22 @@ export function createTools({ workspaceRoot }) {
     policy: { 'fs.read': 'auto', 'fs.write': 'confirm' },
     async run(name, args, runId) {
       if (name === 'fs.read') {
-        const { abs } = await guard(runId, args.path)
-        const text = await readFile(abs, 'utf8')
+        // 读失败要给模型一个干净、可行动的报错，且**不要把宿主机绝对路径**带进对话
+        let abs
+        try {
+          ({ abs } = await guard(runId, args.path))
+        } catch (e) {
+          if (e?.code === 'ENOENT') throw new Error(`file_not_found: ${args.path}`)
+          throw e
+        }
+        let text
+        try {
+          text = await readFile(abs, 'utf8')
+        } catch (e) {
+          if (e?.code === 'ENOENT') throw new Error(`file_not_found: ${args.path}`)
+          if (e?.code === 'EISDIR') throw new Error(`is_a_directory: ${args.path}`)
+          throw new Error(`read_failed: ${args.path}`)
+        }
         return { content: text.slice(0, 4000), artifact: null }
       }
       if (name === 'fs.write') {
