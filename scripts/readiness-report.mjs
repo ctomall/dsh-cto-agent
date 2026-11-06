@@ -52,6 +52,17 @@ const st = units.map((u) => {
   return { u, en: en.out, ac: ac.out }
 })
 const notEnabled = st.filter((x) => x.en !== 'enabled')
+// 磁盘余量：满盘会让写库/升级/备份静默失败，是最容易被忽略的"整体风险"
+const dbPath = process.env.DB_PATH ?? '/var/lib/cube-agent/cube.db'
+const df = run('df', ['-Pk', dbPath], { timeout: 5000 })
+const dfLine = df.out.split('\n')[1] ?? ''
+const dfCols = dfLine.trim().split(/\s+/)
+const availKb = Number(dfCols[3] ?? NaN)
+const availGb = Number.isFinite(availKb) ? availKb / 1024 / 1024 : null
+const diskOk = availGb === null ? null : availGb >= 2
+add('磁盘余量', availGb === null ? '未能读取' : `${availGb.toFixed(1)} GB 可用（${dfCols[4] ?? '?'} 已用）`,
+  diskOk === false ? '**低于 2GB：写库/升级/备份会开始失败**' : '')
+
 add('重启韧性（systemd）',
   notEnabled.length === 0 ? `5 个单元均 enabled（${st.map((x) => x.ac).join('/')}）` : `**未启用**：${notEnabled.map((x) => x.u).join(', ')}`,
   notEnabled.length === 0 ? '' : '机器重启后不会自动恢复')
