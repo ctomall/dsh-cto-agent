@@ -47,3 +47,16 @@
 | 工具沙箱按真实路径 | `impl/src/tools.mjs` | `realpath` 校验目录，挡符号链接逃逸 |
 | 升级 token 常量时间比较 | `impl/src/upgrade.mjs` | `timingSafeEqual`，避免时间侧信道 |
 | 表名白名单 | `impl/src/backup.mjs` | `countTables` 只接受已知表名，杜绝拼接 |
+
+## 代码级安全自查（v145，2026-11-06）
+
+| 检查项 | 做法 | 结论 |
+|---|---|---|
+| SQL 注入 | 全部业务查询用参数绑定；仅 `pragma`/`VACUUM INTO` 与**表名**拼接 | 表名走白名单常量（`TABLES` / `KEY_TABLES`），`VACUUM INTO` 路径由服务端生成并转义单引号 |
+| 命令执行 | 仅升级用 `execFile('git'…)`、`execFile('node'…)`（数组参数、无 shell） | 无 `eval` / `new Function` / `shell:true` |
+| 路径穿越 | 产物路由 `resolve` + 「必须位于 run 工作区内」前缀校验；工具侧 `realpath` 防符号链接逃逸 | 已有用例覆盖 |
+| 响应头注入 | 产物文件名做白名单替换（`[^\w.\-\u4e00-\u9fa5]` → `_`） | 防引号/换行破坏 `Content-Disposition` |
+| 同源脚本执行 | 产物 `?inline=1` 仅对安全类型内联；html/svg/xml 永远 `attachment` + `nosniff` | 浏览器级实测：脚本未执行、触发下载 |
+| 开放重定向 | 重定向目标均为固定路径（`/`、`/login`、`/?sid=…`） | 无外部 URL 注入点 |
+| CSRF | 非 GET 请求校验 `sec-fetch-site: same-origin` | 已有用例覆盖 |
+| 密钥泄漏 | `/api/settings` 断言不出现真实密钥**值**（非关键词） | 用例 + 生产抽查 0 命中 |

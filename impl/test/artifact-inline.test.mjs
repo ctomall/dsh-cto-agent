@@ -90,3 +90,28 @@ test('属性测试：MIME 表里的每个扩展名，内联与否严格等于白
     assert.equal(disp.startsWith('inline'), want, `${ext}(${raw}) 期望 ${want ? 'inline' : 'attachment'}，实际: ${disp}`)
   }
 })
+
+test('未知扩展名一律 attachment（即便带 inline=1）', async (t) => {
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { tmpdir } = await import('node:os')
+  const root = join(tmpdir(), `cube-unk-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  mkdirSync(join(root, 'r_unk'), { recursive: true })
+  process.env.WORKSPACE_ROOT = root
+  for (const f of ['a.zip', 'b.bin', 'c.unknownext']) writeFileSync(join(root, 'r_unk', f), 'x')
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  db.prepare('insert into runs (id,status,started_at,tenant_id,session_id) values (?,?,?,?,?)')
+    .run('r_unk', 'done', new Date().toISOString(), 't_a', 's_a1')
+  const app = createApp(db)
+  t.after(() => { app.close(); rmSync(root, { recursive: true, force: true }) })
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  for (const f of ['a.zip', 'b.bin', 'c.unknownext']) {
+    const r = await fetch(`${base}/api/artifacts/r_unk/${f}?inline=1`, { headers: { authorization: 'Bearer tok_a' } })
+    assert.equal(r.status, 200)
+    assert.match(String(r.headers.get('content-disposition')), /^attachment/, `${f} 必须 attachment`)
+    assert.match(String(r.headers.get('content-type')), /application\/octet-stream/, `${f} 应为 octet-stream`)
+  }
+})
