@@ -291,6 +291,8 @@ kbd {
 .card.approval[data-decision="deny"] .decided { color: #b42318; }
 .card-head .decided { flex: none; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.row-title { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-title:focus-visible { outline: 2px solid var(--blue600); outline-offset: 2px; border-radius: 4px; }
 .row-del { margin-left: auto; flex: none; border: 0; background: transparent; color: var(--ink-meta); font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
 .row-del:hover { background: var(--n100); color: #b42318; }
 .row-del.armed { color: #b42318; background: #fff1f0; font-size: 11px; }

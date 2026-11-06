@@ -463,20 +463,19 @@ async function boot() {
   const ul = $('#sessions')
   ul.textContent = ''
   for (const s of body.sessions || []) {
-    const li = el('li', s.id === state.sessionId ? 'active' : '', s.title)
+    const li = el('li', s.id === state.sessionId ? 'active' : '')
+    li.setAttribute('role', 'listitem')
     const openSession = () => {
       const u = new URL(location.href)
       u.searchParams.set('sid', s.id)
       if (!token) u.searchParams.delete('token')
       location.href = u.toString()
     }
-    // 键盘可达：li 不是天然可聚焦元素，必须显式给 tabindex/role，并处理 Enter/Space
-    li.tabIndex = 0
-    li.setAttribute('role', 'button')
-    li.addEventListener('click', openSession)
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSession() }
-    })
+    // 语义正确：列表项里放两个真正的按钮，而不是「div 冒充按钮里再嵌按钮」
+    const open = el('button', 'row-title', s.title)
+    open.title = s.title
+    open.addEventListener('click', openSession)
+    li.append(open)
 
     // 删除：两段确认（先点 ✕，再点「确认删除」），避免误触直接把会话删干净
     const del = el('button', 'row-del', '✕')
