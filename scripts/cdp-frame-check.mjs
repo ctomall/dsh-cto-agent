@@ -30,5 +30,11 @@ console.log('iframe 嵌入结果:', framed)
 await raw('Page.navigate', { url: VICTIM }, 20000)
 await new Promise((r) => setTimeout(r, 2000))
 console.log('对照（顶层直接打开）:', JSON.stringify(await ev(`({ title: document.title, statusbar: !!document.querySelector('.statusbar') })`)))
-console.log('浏览器日志:', JSON.stringify(logs.filter((l) => /frame|refused|x-frame|content security/i.test(l))))
+const browserLogs = logs.filter((l) => /frame|refused|x-frame|content security/i.test(l))
+console.log('浏览器日志:', JSON.stringify(browserLogs))
+// 结论：iframe 必须被拒（不可访问/被拦截），且"顶层直接打开"必须正常——否则说明是页面坏了，不是防住了
+const top = await ev(`({ title: document.title, statusbar: !!document.querySelector('.statusbar') })`)
+const blocked = /不可访问|拒绝|blocked|检测失败/.test(String(framed))
+const ok = blocked && top?.statusbar === true
+console.log(JSON.stringify({ framed, topOk: top?.statusbar === true, verdict: { blocked, ok } }))
 await raw('Page.close', {}, 5000).catch(() => {}); ws.close()

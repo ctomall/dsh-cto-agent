@@ -14,5 +14,12 @@ await raw('Runtime.enable'); await raw('Page.enable'); await raw('Network.enable
 await raw('Network.setCookie', { name: 'cube_session', value: CK, domain: '127.0.0.1', path: '/', httpOnly: true })
 await raw('Page.navigate', { url: BASE + '/' }, 25000)
 await new Promise((r) => setTimeout(r, 3000))
-console.log('驱动指示:', JSON.stringify(await ev(`({ text: document.querySelector('#sbDriver')?.textContent, real: document.querySelector('#sbDriver')?.dataset.real, title: document.querySelector('#sbDriver')?.title })`)))
+const info = await ev(`({ text: document.querySelector('#sbDriver')?.textContent, real: document.querySelector('#sbDriver')?.dataset.real, title: document.querySelector('#sbDriver')?.title })`)
+// 结论：状态栏必须"如实"——演示驱动要说演示，真实驱动要标 real=1 且写出驱动名
+const text = String(info?.text ?? '')
+const saysFake = /演示驱动/.test(text)
+const ok = saysFake
+  ? info?.real === '0' && /未配置真实模型|未接模型/.test(String(info?.title ?? ''))
+  : Boolean(text) && info?.real === '1'
+console.log(JSON.stringify({ text: info?.text, real: info?.real, title: info?.title, verdict: { saysFake, ok } }))
 await raw('Page.close', {}, 5000).catch(() => {}); ws.close()
