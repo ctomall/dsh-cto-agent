@@ -76,5 +76,24 @@ else
   skip "scripts/README 一致性" "未生成（node scripts/gen-scripts-index.mjs）"
 fi
 
+# 文档里的"N 通过"必须与 HANDOFF 的 <!-- tests: N --> 标记一致（防止过期数字误导读者）
+mark=$(sed -n 's/.*<!-- tests: \([0-9]*\) -->.*/\1/p' HANDOFF.md | head -1)
+if [ -n "${mark:-}" ]; then
+  stale=""
+  for f in README.md RUNBOOK.md HANDOFF.md VERIFICATION.md; do
+    [ -f "$f" ] || continue
+    for n in $(grep -oE '[0-9]+ ?(/[0-9]+ )?通过' "$f" 2>/dev/null | grep -oE '^[0-9]+' | sort -u); do
+      [ "$n" = "$mark" ] || stale="$stale $f:$n"
+    done
+  done
+  if [ -z "$stale" ]; then
+    ok "文档测试数量一致" "全部 = $mark"
+  else
+    no "文档测试数量一致" "与标记($mark)不符:$stale"
+  fi
+else
+  skip "文档测试数量一致" "HANDOFF 缺少 <!-- tests: N --> 标记"
+fi
+
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
