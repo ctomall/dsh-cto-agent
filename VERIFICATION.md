@@ -86,21 +86,24 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 | 阻塞说明 | `HANDOFF.md` |
 
 
-## 未结缺陷（2026-11-06，公网环境）
+## 已撤回的"缺陷"（2026-11-06，公网环境）— 实为测量误差
 
-**产物页在公网 Cookie 模式下不渲染数据（本机两种模式都正常）**
+曾记录「产物页在公网 Cookie 模式下不渲染数据」。**该结论已被推翻**：
 
 | 环境 | 结果 |
 |---|---|
-| 本机 + `?token=`（无门禁） | `count=200 个`、`status=就绪`、200 行 |
-| 本机 + 口令门（Cookie 模式） | `count=200 个`、`status=就绪`、200 行 |
-| **公网 https://cto.ila3.top（Cookie 模式）** | `count='-'`、`status='空闲'`、1 行占位 |
+| 本机 `?token=`（无门禁） | `count=200 个`、`status=就绪`、200 行 |
+| 本机 口令门（Cookie 模式） | `count=200 个`、`status=就绪`、200 行 |
+| **公网 https://cto.ila3.top（Cookie 模式）** | **`count=200 个`、`status=就绪`、200 行**（两次独立复测） |
 
-已排除：产物接口本身（公网页面内 `fetch('/api/artifacts?limit=200')` → 200、27KB、892ms）；
-静态资源（线上 `artifacts.js` 含最新 `fetchT`，`hasTimeout:true`）；JS 异常（`window.__errs` 为空）。
+同类误报还有一处：**总览页的「用量」pill** 曾显示 `用量 -`，同样怀疑是缺陷；实测
+`/api/usage` 返回 200（runs 430），并在 5s 后正常显示 `近 7 天 · 430 次运行 · 0 tokens`。
 
-下一步（未做）：在公网页面内插桩各 await 之间的时间戳，定位卡在哪一步；同时排查
-`/api/model/status` 在公网 Cookie 模式下是否 429/悬挂。
+原因：前几次是在页面只等 `readyState=complete` 后固定 sleep 3–4 秒就读 DOM；公网链路上
+页面要顺序发多个请求（`/api/me → /api/version → /api/model/status → /api/artifacts`；
+总览还有第二条 `/api/usage`），**读得太早，读到的是初始占位符**。改为轮询到数据出现（最多 60s），5s 即就绪。
+
+教训：**"没数据"要先区分"没跑到"和"没跑完"**。测量前必须定义"就绪信号"，而不是睡固定秒数。
 
 ## 全面复验记录（2026-11-06 07:5x UTC）
 

@@ -45,13 +45,13 @@ const loggedIn = await login()
 if (!loggedIn) { console.log(JSON.stringify({ ok: false, step: 'login' })); process.exit(1) }
 
 const checks = [
-  ['overview', '/overview', `document.querySelectorAll('#layers > *').length > 0`, () => ev(`({
+  ['overview', '/overview', `document.querySelectorAll('#layers > *').length > 0 && (document.querySelector('#usage')?.textContent ?? '').includes('次运行')`, () => ev(`({
       title: document.title,
       layers: document.querySelectorAll('#layers > *').length,
       usage: document.querySelector('#usage')?.textContent ?? null,
       driver: document.querySelector('#driver')?.textContent?.trim() ?? null,
     })`)],
-  ['artifacts', '/artifacts', `document.querySelector('#count')?.textContent !== '-'`, () => ev(`({
+  ['artifacts', '/artifacts', `!!document.querySelector('#count') && document.querySelector('#count').textContent !== '-'`, () => ev(`({
       title: document.title,
       count: document.querySelector('#count')?.textContent ?? null,
       rows: document.querySelectorAll('#list > *').length,
@@ -72,7 +72,8 @@ for (const [name, path, ready, read] of checks) {
   let ok = false
   for (let attempt = 0; attempt < 3 && !ok; attempt++) {
     await raw('Page.navigate', { url: BASE + path }, 40000).catch(() => {})
-    ok = await until(ready, 20000)
+    // 公网链路要顺序发 4 个请求：给足 45s，并用"数据出现"而非固定 sleep 判定就绪
+    ok = await until(ready, 45000)
   }
   results[name] = { ok, ...(await read().catch(() => ({}))) }
 }
