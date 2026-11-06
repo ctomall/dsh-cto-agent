@@ -1,0 +1,10 @@
+[Unit]
+Description=每日备份 Cube Agent（03:30，错过则开机补跑）
+
+[Timer]
+OnCalendar=03:30
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

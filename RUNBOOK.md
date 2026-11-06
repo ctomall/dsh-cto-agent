@@ -134,3 +134,16 @@ sudo ./scripts/restore-drill.sh          # 或用 SRC_DB=... 指定源库
 - **门禁必须在干净环境跑**：`upgrade.mjs` 用 `cleanTestEnv()` 剥离 `CUBE_TOKENS / APP_PASSWORD / DB_PATH / WORKSPACE_ROOT / PORT / MODEL_*` 等 15 个变量并设 `NODE_ENV=test`
 - 教训：服务进程带着生产 env 直接 `node --test`，会让 gate 测试走生产配置（期望未开口令门）而 100% 失败
 - 自举顺序（如果门禁逻辑本身要修）：先 `UPGRADE_RUN_TESTS=0` 升上去 → 重启 → 再设回 1
+
+## 自动备份（systemd timer）
+
+```bash
+systemctl list-timers cube-agent-backup.timer     # 下次触发时间
+sudo systemctl start cube-agent-backup.service     # 立即跑一次
+sudo journalctl -u cube-agent-backup.service -n 20 # 看校验结果
+ls -la /var/backups/cube-agent                     # 产物（默认保留最近 14 份）
+```
+
+- 单元文件在仓库 `deploy/cube-agent-backup.{service,timer}`，安装在 `/etc/systemd/system/`
+- 每日 03:30 触发，`Persistent=true`（关机错过会在开机后补跑），`RandomizedDelaySec=300`
+- 备份脚本自带逐表行数校验；不一致会 `exit 1`，journal 里能直接看到

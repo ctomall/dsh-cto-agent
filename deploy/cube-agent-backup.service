@@ -1,0 +1,11 @@
+[Unit]
+Description=Cube Agent 在线备份（VACUUM INTO + 逐表校验）
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pro
+ExecStart=/usr/bin/node /opt/cube-agent/scripts/backup.mjs --db /var/lib/cube-agent/cube.db --out /var/backups/cube-agent
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
