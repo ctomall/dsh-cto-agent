@@ -146,9 +146,9 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
       if (runTests) {
         const t0 = Date.now()
         try {
-          // --test-concurrency=2：门禁跑在生产机上，和线上流量抢 CPU。
-          // 默认并发（=CPU 数）下，时间敏感用例会因负载而假红，导致"误回滚"（v223 真实发生）
-          await cmd(['--test', '--test-concurrency=2', ...testFilesForScope(process.env, undefined, repoDir)])
+          // 门禁并发固定为 6（实测：2→69s、4→37s、6→28s；3 路并行跑 6 仍全绿）。
+          // 用默认并发（=CPU 数，本机 56）时时间敏感用例会互相饿死 → 假红 → 误回滚（v223 真实发生）。
+          await cmd(['--test', '--test-concurrency=6', ...testFilesForScope(process.env, undefined, repoDir)])
           tests = 'passed'
           testsMs = Date.now() - t0
         } catch (e) {
