@@ -12,7 +12,9 @@ probe() { # name file patch_py tests...
   cp "$file" "$file.mutbak"
   python3 -c "$patch" "$file"
   local out rc
-  out=$(timeout 200 node --test --test-timeout=25000 "${tests[@]}" 2>&1); rc=$?
+  # -k 10：TERM 后再 KILL，否则被测代码挂住时 timeout 会一直等（曾把探针卡死 15 分钟）
+  # --test-force-exit：测试跑完就退，不被残留句柄拖住
+  out=$(timeout -k 10 200 node --test --test-force-exit --test-timeout=25000 "${tests[@]}" 2>&1); rc=$?
   mv "$file.mutbak" "$file"
   if [ "$rc" -ne 0 ]; then ok "$name" "测试变红（有效）"; else no "$name" "测试仍全绿（该用例无效）"; fi
 }
@@ -54,6 +56,16 @@ old='this.grants?.has({ tenantId, sessionId, tool: call.name })'
 assert s.count(old)==1
 io.open(p,'w',encoding='utf-8').write(s.replace(old,'false',1))
 " impl/test/grants-isolation.test.mjs impl/test/session-grant-skips-approval-card.test.mjs
+
+probe "会话授权跨会话继承（忽略 sessionId）" impl/src/grants.mjs "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old='select 1 from session_grants where tenant_id = ? and session_id = ? and tool = ? and scope = \'session\''
+new=\"select 1 from session_grants where tenant_id = ? and tool = ?\"
+assert s.count(old)==1
+s=s.replace(old,new,1).replace('.get(tenantId, sessionId, tool)','.get(tenantId, tool)',1)
+io.open(p,'w',encoding='utf-8').write(s)
+" impl/test/grants-isolation.test.mjs impl/test/grants-scope.test.mjs
 
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
