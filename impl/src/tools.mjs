@@ -1,7 +1,7 @@
 // 工具集：每个工具声明 policy（auto/confirm/deny），由 loop 统一裁决。
 // 路径一律限制在 run 的工作区内，越界直接拒绝（对齐文档 §4 fs.* 规则）。
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, resolve, sep } from 'node:path'
+import { mkdir, readFile, writeFile, realpath } from 'node:fs/promises'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 
 const inside = (root, p) => {
   const abs = resolve(root, p)
@@ -9,11 +9,21 @@ const inside = (root, p) => {
 }
 
 export function createTools({ workspaceRoot }) {
-  const guard = (runId, p) => {
+  // 词法检查只能挡 "../"；符号链接能绕过它（link -> /outside）。
+  // 因此落盘前还要对目录做 realpath 校验，确保真实路径仍在工作区内。
+  const guard = async (runId, p, { create = false } = {}) => {
     const root = resolve(workspaceRoot, runId)
     const abs = inside(root, p)
     if (!abs) throw new Error(`path outside workspace: ${p}`)
-    return { root, abs }
+    await mkdir(root, { recursive: true })
+    const realRoot = await realpath(root)
+    const dir = dirname(abs)
+    if (create) await mkdir(dir, { recursive: true })
+    const realDir = await realpath(dir)
+    if (realDir !== realRoot && !realDir.startsWith(realRoot + sep)) {
+      throw new Error(`path outside workspace: ${p}`)
+    }
+    return { root: realRoot, abs: join(realDir, basename(abs)) }
   }
 
   return {
@@ -36,13 +46,12 @@ export function createTools({ workspaceRoot }) {
     policy: { 'fs.read': 'auto', 'fs.write': 'confirm' },
     async run(name, args, runId) {
       if (name === 'fs.read') {
-        const { abs } = guard(runId, args.path)
+        const { abs } = await guard(runId, args.path)
         const text = await readFile(abs, 'utf8')
         return { content: text.slice(0, 4000), artifact: null }
       }
       if (name === 'fs.write') {
-        const { root, abs } = guard(runId, args.path)
-        await mkdir(dirname(abs), { recursive: true })
+        const { root, abs } = await guard(runId, args.path, { create: true })
         await writeFile(abs, String(args.content ?? ''), 'utf8')
         return { content: `已写入 ${abs}`, artifact: { path: args.path, mime: 'text/markdown', size: Buffer.byteLength(String(args.content ?? '')) }, root }
       }
