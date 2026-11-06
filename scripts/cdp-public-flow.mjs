@@ -42,6 +42,10 @@ await until(`!!document.querySelector('input[name=password]')`, '登录页')
 await ev(`(() => { const i=document.querySelector('input[name=password]'); i.value=${JSON.stringify(PW)}; document.querySelector('form').submit(); return true })()`)
 await until(`location.pathname === '/' && !!document.querySelector('#input')`, '登录成功进入工作台', 60000)
 console.log('登录成功')
+// 等 boot 完成：会话列表出现（说明 /api/sessions 已回）且 URL 里已带上 sid（无 sid 时会自动落到最近会话）
+await until(`!!document.querySelector('#sessions li')`, '会话列表渲染', 60000)
+await until(`!!new URL(location.href).searchParams.get('sid')`, 'URL 带回 sid', 30000)
+console.log('当前 sid:', await ev(`new URL(location.href).searchParams.get('sid')`))
 
 // 2) 输入目标并发送（Enter）
 // 直接派发 form submit：比模拟 Enter 更稳定（keydown 监听在 #input 上，依赖焦点状态）
