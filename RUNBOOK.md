@@ -147,3 +147,12 @@ ls -la /var/backups/cube-agent                     # 产物（默认保留最近
 - 单元文件在仓库 `deploy/cube-agent-backup.{service,timer}`，安装在 `/etc/systemd/system/`
 - 每日 03:30 触发，`Persistent=true`（关机错过会在开机后补跑），`RandomizedDelaySec=300`
 - 备份脚本自带逐表行数校验；不一致会 `exit 1`，journal 里能直接看到
+
+## 恢复演练（用定时器产出的那份备份）
+
+```bash
+./scripts/restore-drill.sh 8790 --from-latest   # 取 /var/backups 最新一份
+./scripts/restore-drill.sh 8790                 # 或现场新做一份再还原
+```
+
+校验项：最新备份存在 → `integrity_check=ok` → 还原副本 → 独立实例 `/healthz` → `/api/overview` 可用 → 行数与还原库一致。

@@ -3,6 +3,9 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 PORT="${1:-8797}"
+FROM_LATEST=0
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/cube-agent}"
+for a in "$@"; do [ "$a" = "--from-latest" ] && FROM_LATEST=1; done
 SRC_DB="${SRC_DB:-/var/lib/cube-agent/cube.db}"
 WORK=$(mktemp -d); LOG="$WORK/app.log"
 cleanup(){ [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null; rm -rf "$WORK"; }
@@ -12,10 +15,18 @@ pass=0; fail=0
 ok(){ printf '  ✔ %-30s %s\n' "$1" "$2"; pass=$((pass+1)); }
 no(){ printf '  ✖ %-30s %s\n' "$1" "$2"; fail=$((fail+1)); }
 
-echo "== 1) 用备份脚本产出一份快照"
-out=$(node scripts/backup.mjs --db "$SRC_DB" --out "$WORK/bak" 2>&1) || { echo "$out"; exit 1; }
-BK=$(printf '%s\n' "$out" | sed -n 's/^备份完成: \(.*\)（.*/\1/p')
-[ -f "$BK" ] && ok "备份产出" "$(basename "$BK")" || { no "备份产出" "$out"; exit 1; }
+if [ "$FROM_LATEST" = 1 ]; then
+  echo "== 1) 取定时器产出的最新备份（灾难现场真实存在的那份）"
+  BK=$(ls -t "$BACKUP_DIR"/cube-*.db 2>/dev/null | head -1)
+  [ -n "$BK" ] && [ -f "$BK" ] && ok "最新备份存在" "$(basename "$BK")（$(stat -c %s "$BK") 字节）" || { no "最新备份存在" "$BACKUP_DIR 下没有 cube-*.db"; exit 1; }
+  ic=$(node -e "const {DatabaseSync}=require('node:sqlite');const d=new DatabaseSync(process.argv[1],{readOnly:true});console.log(d.prepare('pragma integrity_check').get().integrity_check)" "$BK" 2>&1)
+  [ "$ic" = "ok" ] && ok "完整性检查" "integrity_check=ok" || no "完整性检查" "$ic"
+else
+  echo "== 1) 用备份脚本产出一份快照"
+  out=$(node scripts/backup.mjs --db "$SRC_DB" --out "$WORK/bak" 2>&1) || { echo "$out"; exit 1; }
+  BK=$(printf '%s\n' "$out" | sed -n 's/^备份完成: \(.*\)（.*/\1/p')
+  [ -f "$BK" ] && ok "备份产出" "$(basename "$BK")" || { no "备份产出" "$out"; exit 1; }
+fi
 
 echo "== 2) 还原到独立库（模拟灾备恢复）"
 cp "$BK" "$WORK/restored.db"
