@@ -275,6 +275,8 @@ kbd {
   outline-offset: 2px;
 }
 
+.chip-driver { font-size: 11px; color: var(--ink-meta); }
+.chip-driver[data-real="0"] { color: #8a5a00; } /* 未接模型时用琥珀色提示，不吓人但看得见 */
 .grant-item { font-size: 12px; color: var(--n700); padding: 4px 0; }
 
 @media (max-width: 1023px) {

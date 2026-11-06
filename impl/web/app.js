@@ -338,6 +338,17 @@ async function lastSeq(runId) {
   }
 }
 
+// 驱动必须如实展示：模型没接上时，页面不能看起来像一个真在思考的 agent
+async function loadDriver() {
+  const { status, body } = await api('/api/model/status')
+  const elx = $('#sbDriver')
+  if (!elx) return
+  if (status !== 200) { elx.textContent = '驱动 ?'; return }
+  elx.textContent = body.real ? `驱动 ${body.driver}` : '演示驱动（未接模型）'
+  elx.dataset.real = body.real ? '1' : '0'
+  elx.title = body.real ? `模型：${body.driver}` : `未配置真实模型：${body.source ?? ''}（见 HANDOFF ①）`
+}
+
 async function loadHistory() {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/messages`)
   if (status !== 200 || !body.messages?.length) return
@@ -407,6 +418,7 @@ async function boot() {
     ul.append(li)
   }
 
+  await loadDriver()
   await loadHistory()
   await loadPending()
   await loadActive()
