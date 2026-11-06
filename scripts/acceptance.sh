@@ -92,6 +92,15 @@ me_cookie=$(code -b "$JAR" "$BASE/api/me")
 ov=$(curl -s -m 20 -b "$JAR" "$BASE/api/overview")
 echo "$ov" | grep -q '"tenantId"' && ok "总览 API" "200 且含 tenantId" || no "总览 API" "响应异常：$(echo "$ov" | head -c 60)"
 
+# 会话级状态接口（审批还原 / 授权 / 产物 / 续接）——刷新后界面靠这四个接口说真话
+SID_PROBE=$(cut -d= -f2- "$TOK_FILE" 2>/dev/null | head -1 >/dev/null; echo s_a1)
+all_ok=1
+for ep in pending grants artifacts active; do
+  c=$(code -b "$JAR" -H "Authorization: Bearer $T_A" "$BASE/api/sessions/$SID_PROBE/$ep")
+  [ "$c" = 200 ] || { all_ok=0; echo "  … /$ep 返回 $c"; }
+done
+[ "$all_ok" = 1 ] && ok "会话级状态接口" "pending/grants/artifacts/active 均 200" || no "会话级状态接口" "有端点未返回 200"
+
 # 跨站变更请求必须被挡（Cookie 身份下的 CSRF 防护）
 csrf=$(code -b "$JAR" -H 'content-type: application/json' -H 'sec-fetch-site: cross-site' -d '{}' -X POST "$BASE/api/sessions")
 [ "$csrf" = 403 ] && ok "跨站写请求被拒" "403" || no "跨站写请求被拒" "期望 403，实际 $csrf"
