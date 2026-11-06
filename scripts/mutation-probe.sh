@@ -76,5 +76,14 @@ assert s.count(old)==1
 io.open(p,'w',encoding='utf-8').write(s.replace(old,new,1))
 " impl/test/ui-approval-decisions.test.mjs
 
+probe "事件序列被硬编码（final 分支硬塞 tool.started）" impl/src/loop.mjs "
+import io,sys
+p=sys.argv[1]; s=io.open(p,encoding='utf-8').read()
+old=\"    if (decision.type === 'final') {\"
+assert s.count(old)==1
+new=\"    if (decision.type === 'final') {\\n      this.rc.emitTo(runId, 'tool.started', { tool: 'hardcoded', callId: 'mut' })\"
+io.open(p,'w',encoding='utf-8').write(s.replace(old,new,1))
+" impl/test/model-driven-sequence.test.mjs
+
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
