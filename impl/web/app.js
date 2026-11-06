@@ -223,7 +223,10 @@ function setStatus(text, kind) {
 }
 
 function handleEvent(type, p) {
-  if (type === 'text.delta') {
+  if (type === 'run.started') {
+    // 每轮一个助手块：否则第二轮文本会追加到第一轮的节点上（实测会粘成一段）
+    state.assistant = null
+  } else if (type === 'text.delta') {
     ensureAssistant().textContent += p.text
   } else if (type === 'tool.started') {
     if (p.args) state.toolArgs.set(p.callId, p.args)
@@ -269,7 +272,7 @@ function subscribe(runId, { lastEventId = 0 } = {}) {
   const es = new EventSource(`/api/runs/${runId}/events?${q.toString()}`)
   state.es = es
   for (const t of [
-    'text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved',
+    'run.started', 'text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved',
     'approval.decided', 'tool.finished', 'artifact.created', 'run.finished', 'run.canceled', 'run.failed',
   ]) {
     es.addEventListener(t, (e) => {
