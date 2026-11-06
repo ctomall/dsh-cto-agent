@@ -15,10 +15,10 @@ function fakeExec(sha) {
 }
 
 test('门禁超时阈值可配（下限 10s，默认 180s）', () => {
-  assert.equal(testTimeoutMs({}), 180_000)
+  assert.equal(testTimeoutMs({}), 300_000)
   assert.equal(testTimeoutMs({ UPGRADE_TEST_TIMEOUT_MS: '30000' }), 30_000)
-  assert.equal(testTimeoutMs({ UPGRADE_TEST_TIMEOUT_MS: '100' }), 180_000, '低于下限应回默认')
-  assert.equal(testTimeoutMs({ UPGRADE_TEST_TIMEOUT_MS: 'abc' }), 180_000)
+  assert.equal(testTimeoutMs({ UPGRADE_TEST_TIMEOUT_MS: '100' }), 300_000, '低于下限应回默认')
+  assert.equal(testTimeoutMs({ UPGRADE_TEST_TIMEOUT_MS: 'abc' }), 300_000)
 })
 
 test('门禁超时 → 回滚且错误里点名 timeout（不与"测试失败"混为一谈）', async () => {

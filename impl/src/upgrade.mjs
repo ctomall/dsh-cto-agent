@@ -81,7 +81,9 @@ export function summarizeTestFailure(output, limit = 400) {
 
 export function testTimeoutMs(env = process.env) {
   const v = Number(env.UPGRADE_TEST_TIMEOUT_MS)
-  return Number.isFinite(v) && v >= 10_000 ? Math.trunc(v) : 180_000
+  // 默认 300s：门禁用 --test-concurrency=2 跑全量，本机 95 个测试文件约 70s；
+  // 留出约 4 倍余量，避免"测试变多"时撞超时被误判成测试失败（那会触发自动回滚）
+  return Number.isFinite(v) && v >= 10_000 ? Math.trunc(v) : 300_000
 }
 
 export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', runTests = false, exec, runCommand } = {}) {
