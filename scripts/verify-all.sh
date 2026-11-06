@@ -67,6 +67,8 @@ if curl -s -m 3 http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 不重复 $out"; }
   out=$(timeout 140 node scripts/check-approval-truncation.mjs 2>&1 | tail -1)
   echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 截断提示 $out"; }
+  out=$(timeout 140 node scripts/check-boot-resilience.mjs 2>&1 | tail -1)
+  echo "$out" | grep -q '"ok":true' || { bfail=$((bfail+1)); echo "  ✖ 启动容错 $out"; }
   if [ "$bfail" -eq 0 ]; then ok "浏览器级演练" "失败原因×3 / 不重复 / 截断提示 全绿"; else no "浏览器级演练" "$bfail 项失败"; fi
 else
   skip "浏览器级演练" "无 CDP（:9222），跳过"
