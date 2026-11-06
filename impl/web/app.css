@@ -277,6 +277,9 @@ kbd {
 
 .chip-driver { font-size: 11px; color: var(--ink-meta); }
 .chip-driver[data-real="0"] { color: #8a5a00; } /* 未接模型时用琥珀色提示，不吓人但看得见 */
+.set-row { display: flex; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line-1); }
+.set-key { width: 220px; flex: none; font-size: 12px; color: var(--ink-meta); }
+.set-val { font-size: 13px; color: var(--n1000); overflow-wrap: anywhere; }
 .art-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line-1); }
 .art-main { min-width: 0; flex: 1; }
 .art-name { font-size: 13px; color: var(--n1000); overflow-wrap: anywhere; }

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 // 静态断言：无障碍语义不能被后续改版悄悄删掉
 const html = (name) => readFileSync(new URL(`../web/${name}`, import.meta.url), 'utf8')
 
-for (const file of ['index.html', 'overview.html', 'artifacts.html']) {
+for (const file of ['index.html', 'overview.html', 'artifacts.html', 'settings.html']) {
   test(`${file}：语言、主区域名称、状态播报、消息流播报`, () => {
     const s = html(file)
     assert.match(s, /<html lang="zh-CN">/, '必须有 lang')

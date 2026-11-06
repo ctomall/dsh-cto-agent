@@ -430,6 +430,25 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { audit: items, limit }))
     }
 
+    // —— 运行时设置（只读、脱敏）：告诉运维"现在到底跑着什么配置" ——
+    if (req.method === 'GET' && url.pathname === '/api/settings') {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const keepDays = Number(process.env.RETENTION_DAYS ?? 30)
+      const startedAt = new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString()
+      return reply(res, json(200, {
+        tenantId: ctx.tenantId,
+        version: BOOT_SHA,
+        driver: { name: driver.name, real: !driver.name.startsWith('fake') },
+        limits: LIMITS,
+        maxBodyBytes: MAX_BODY,
+        retentionDays: Number.isFinite(keepDays) ? keepDays : null,
+        upgrade: { testGate: process.env.UPGRADE_RUN_TESTS === '1', exitAfter: process.env.UPGRADE_EXIT_AFTER === '1' },
+        startedAt,
+        // 明确不返回：令牌、口令、模型密钥、DB 绝对路径
+      }))
+    }
+
     // —— 全部产物（跨会话，租户内）：/artifacts 页面的数据源 ——
     if (req.method === 'GET' && url.pathname === '/api/artifacts') {
       const ctx = ctxOf(req)
@@ -530,13 +549,15 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       (url.pathname === '/' ||
         url.pathname === '/overview' ||
         url.pathname === '/artifacts' ||
-        /^\/((app|overview|artifacts)\.(js|css)|favicon\.svg)$/.test(url.pathname) ||
+        url.pathname === '/settings' ||
+        /^\/((app|overview|artifacts|settings)\.(js|css)|favicon\.svg)$/.test(url.pathname) ||
         /^\/fonts\/(montserrat-(light|regular|medium)\.woff2|Montserrat-OFL\.txt)$/.test(url.pathname))
     ) {
       const file =
         url.pathname === '/' ? 'index.html'
         : url.pathname === '/overview' ? 'overview.html'
         : url.pathname === '/artifacts' ? 'artifacts.html'
+        : url.pathname === '/settings' ? 'settings.html'
         : url.pathname.slice(1)
       try {
         const buf = await readFile(resolve(WEB_ROOT, file))
