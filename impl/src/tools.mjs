@@ -68,7 +68,8 @@ export function createTools({ workspaceRoot }) {
         const { root, abs } = await guard(runId, args.path, { create: true })
         // 0600：租户产物不该被同机其他用户读到
         await writeFile(abs, String(args.content ?? ''), { encoding: 'utf8', mode: 0o600 })
-        return { content: `已写入 ${abs}`, artifact: { path: args.path, mime: 'text/markdown', size: Buffer.byteLength(String(args.content ?? '')) }, root }
+        // 回给模型/用户的路径用"会话内相对路径"：绝对路径会把宿主机目录结构带进对话与日志
+        return { content: `已写入 ${args.path}`, artifact: { path: args.path, mime: 'text/markdown', size: Buffer.byteLength(String(args.content ?? '')) }, root }
       }
       throw new Error(`unknown tool: ${name}`)
     },
