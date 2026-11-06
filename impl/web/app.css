@@ -291,6 +291,9 @@ kbd {
 .card.approval[data-decision="deny"] .decided { color: #b42318; }
 .card-head .decided { flex: none; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.rail-filter { width: calc(100% - 16px); margin: 0 8px 8px; height: 26px; padding: 0 8px; font-size: 12px; color: var(--n1000); background: var(--n00); border: 1px solid var(--line-3); border-radius: var(--r-sm); }
+.rail-filter:focus-visible { outline: 2px solid var(--blue600); outline-offset: 1px; }
+.rail-label { display: flex; justify-content: space-between; align-items: center; }
 .row-title { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-title:focus-visible { outline: 2px solid var(--blue600); outline-offset: 2px; border-radius: 4px; }
 .row-del { margin-left: auto; flex: none; border: 0; background: transparent; color: var(--ink-meta); font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; }

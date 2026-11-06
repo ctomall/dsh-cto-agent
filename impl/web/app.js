@@ -464,6 +464,7 @@ async function boot() {
   ul.textContent = ''
   for (const s of body.sessions || []) {
     const li = el('li', s.id === state.sessionId ? 'active' : '')
+    li.dataset.title = String(s.title ?? '')
     li.setAttribute('role', 'listitem')
     const openSession = () => {
       const u = new URL(location.href)
@@ -523,7 +524,34 @@ async function boot() {
       if (e.key === 'Enter') { e.preventDefault(); startRename() }
     })
   }
+  bindSessionFilter()
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
+}
+
+// 会话筛选：纯前端过滤（列表已在内存里），并用「/」快速聚焦
+function bindSessionFilter() {
+  const box = $('#session-filter')
+  const ul = $('#sessions')
+  if (!box || !ul) return
+  const apply = () => {
+    const q = box.value.trim().toLowerCase()
+    let shown = 0
+    for (const li of ul.children) {
+      const hit = !q || String(li.dataset.title ?? li.textContent).toLowerCase().includes(q)
+      li.hidden = !hit
+      if (hit) shown += 1
+    }
+    const cnt = $('#session-count')
+    if (cnt) cnt.textContent = q ? `${shown}/${ul.children.length}` : `${ul.children.length}`
+  }
+  box.addEventListener('input', apply)
+  box.addEventListener('keydown', (e) => { if (e.key === 'Escape') { box.value = ''; apply() } })
+  document.addEventListener('keydown', (e) => {
+    const tag = (document.activeElement?.tagName || '').toLowerCase()
+    const typing = tag === 'input' || tag === 'textarea'
+    if (!typing && e.key === '/') { e.preventDefault(); box.focus(); box.select() }
+  })
+  apply()
 }
 
 $('#composer').addEventListener('submit', (e) => {

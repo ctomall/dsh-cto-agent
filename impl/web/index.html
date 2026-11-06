@@ -34,7 +34,11 @@
     </nav>
 
     <div class="rail-section">
-      <div class="rail-label">会话</div>
+      <div class="rail-label">
+        <span>会话</span>
+        <span class="meta" id="session-count"></span>
+      </div>
+      <input id="session-filter" class="rail-filter" type="search" placeholder="筛选会话（/）" aria-label="筛选会话" autocomplete="off" />
       <ul id="sessions" class="sessions"></ul>
     </div>
 
