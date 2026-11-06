@@ -206,7 +206,7 @@ function artifactNode(p, runId = state.runId) {
   const href =
     `/api/artifacts/${encodeURIComponent(runId)}/` +
     p.path.split('/').map(encodeURIComponent).join('/') +
-    `?token=${encodeURIComponent(token)}`
+    `?token=${encodeURIComponent(token)}&inline=1`
   const acts = el('div', 'acts')
   const preview = el('a', 'btn', '预览')
   preview.href = href

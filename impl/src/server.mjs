@@ -357,12 +357,23 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (abs !== root && !abs.startsWith(root + sep)) return reply(res, json(400, { error: 'path_outside_workspace' }))
       try {
         const buf = await readFile(abs)
-        const type = MIME[extname(abs)] ?? 'application/octet-stream'
+        const rawType = MIME[extname(abs)] ?? 'application/octet-stream'
+        // 只有"渲染了也不会执行脚本"的类型才允许内联；html/svg 一律强制下载
+        const INLINE_OK = new Set([
+          'text/plain', 'text/markdown', 'application/json',
+          'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf',
+        ])
+        const baseType = rawType.split(';')[0].trim().toLowerCase()
+        const wantInline = url.searchParams.get('inline') === '1' && INLINE_OK.has(baseType)
+        const type =
+          baseType.startsWith('text/') && !/charset=/i.test(rawType) ? `${rawType}; charset=utf-8` : rawType
+        const safeName = String(abs.split('/').pop()).replace(/[^\w.\-\u4e00-\u9fa5]/g, '_')
         res.writeHead(200, {
           'content-type': type,
           'content-length': String(buf.length),
-          'content-disposition': `attachment; filename="${abs.split('/').pop()}"`,
+          'content-disposition': `${wantInline ? 'inline' : 'attachment'}; filename="${safeName}"`,
           'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
         })
         return res.end(buf)
       } catch {
