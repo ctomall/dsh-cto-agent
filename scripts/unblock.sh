@@ -7,8 +7,12 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-ENV_FILE=/etc/cube-agent/env
-KEY_FILE=/etc/cube-agent/model.key
+# 路径与重启命令可用环境变量覆盖：默认仍是生产路径。
+# 这样"放行脚本本身"也能在临时目录 + mock 端点下被完整测一遍（它只在接 key 那天跑，不测太危险）。
+ENV_FILE="${UNBLOCK_ENV_FILE:-/etc/cube-agent/env}"
+KEY_FILE="${UNBLOCK_KEY_FILE:-/etc/cube-agent/model.key}"
+SUDO="${UNBLOCK_SUDO-sudo}"                 # 置空则不调用 sudo（测试用）
+RESTART="${UNBLOCK_SYSTEMCTL-sudo systemctl restart cube-agent.service}"
 BASE_URL=""; MODEL=""; PROBE=0; CHECK=0; VERIFY=0; PLAN=0; BASE="http://127.0.0.1:8787"
 MODEL_KEY=""; CF_TOKEN=""; CF_ACCOUNT=""; CF_ZONE=""; EMAILS=""
 
@@ -84,15 +88,15 @@ if [ -n "$MODEL_KEY" ]; then
     sk-*) : ;;
     *) echo "FAIL: 模型 key 通常以 sk- 开头，请确认" >&2; exit 2 ;;
   esac
-  sudo install -d -m 750 /etc/cube-agent
-  printf '%s\n' "$MODEL_KEY" | sudo tee "$KEY_FILE" >/dev/null
-  sudo chmod 600 "$KEY_FILE"
+  $SUDO mkdir -p "$(dirname "$KEY_FILE")"
+  printf '%s\n' "$MODEL_KEY" | $SUDO tee "$KEY_FILE" >/dev/null
+  $SUDO chmod 600 "$KEY_FILE"
   BASE_URL="${BASE_URL:-https://api.deepseek.com/v1}"
   MODEL="${MODEL:-deepseek-chat}"
-  sudo sed -i '/^MODEL_/d' "$ENV_FILE" 2>/dev/null || true
-  printf 'MODEL_BASE_URL=%s\nMODEL_NAME=%s\nMODEL_API_KEY_FILE=%s\n' "$BASE_URL" "$MODEL" "$KEY_FILE" | sudo tee -a "$ENV_FILE" >/dev/null
+  $SUDO sed -i '/^MODEL_/d' "$ENV_FILE" 2>/dev/null || true
+  printf 'MODEL_BASE_URL=%s\nMODEL_NAME=%s\nMODEL_API_KEY_FILE=%s\n' "$BASE_URL" "$MODEL" "$KEY_FILE" | $SUDO tee -a "$ENV_FILE" >/dev/null
   echo "== 已写入 $KEY_FILE（0600）与 $ENV_FILE"
-  sudo systemctl restart cube-agent.service
+  $RESTART || true
   for i in $(seq 1 30); do sleep 1; curl -s -o /dev/null -m 3 "$BASE/healthz" && break; done
   echo "== model/status:"; node scripts/model-doctor.mjs || true
   if [ "$PROBE" = 1 ]; then echo "== 真实探测（会消耗一次调用）"; node scripts/model-doctor.mjs --probe || exit 3; fi
