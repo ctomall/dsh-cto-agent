@@ -77,7 +77,9 @@ for (const [name, path, ready, read] of checks) {
   }
   results[name] = { ok, ...(await read().catch(() => ({}))) }
 }
-console.log(JSON.stringify(results, null, 1))
+// 结论：四个页面全都要"有数据"（不是占位符），缺一页就算没通过
+const allOk = ['overview', 'artifacts', 'settings', 'workbench'].every((k) => results[k]?.ok)
+console.log(JSON.stringify({ ...results, verdict: { ok: allOk } }, null, 1))
 await raw('Page.close', {}, 5000).catch(() => {})
 ws.close()
 process.exit(Object.values(results).every((r) => r.ok) ? 0 : 1)
