@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # 重启韧性演练：审批挂起时重启服务，恢复后批准，必须「只执行一次」。
-# 用法：sudo scripts/restart-drill.sh [BASE]
+# 用法：sudo scripts/restart-drill.sh [BASE] [--sigkill]
+#   --sigkill  用 kill -9 代替 systemctl restart（验证非优雅退出）
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-BASE="${1:-http://127.0.0.1:8787}"
+BASE="http://127.0.0.1:8787"; MODE="graceful"
+for a in "$@"; do
+  case "$a" in
+    --sigkill) MODE="sigkill" ;;
+    http*) BASE="$a" ;;
+  esac
+done
 . scripts/lib-login.sh
 pass=0; fail=0
 ok(){ printf '  ✔ %-30s %s\n' "$1" "$2"; pass=$((pass+1)); }
@@ -26,7 +33,13 @@ RUN=$(curl -s -m 30 "${H[@]}" -d "{\"input\":\"写一份报告\",\"sessionId\":\
 sleep 1
 [ -n "$RUN" ] && ok "创建并挂起" "$RUN" || { no "创建并挂起" "空"; exit 1; }
 
-sudo systemctl restart cube-agent.service || no "重启服务" "失败"
+if [ "$MODE" = "sigkill" ]; then
+  OLD=$(systemctl show -p MainPID --value cube-agent.service)
+  sudo kill -9 "$OLD" 2>/dev/null || no "SIGKILL" "发送失败"
+  ok "发送 SIGKILL" "旧 PID=$OLD"
+else
+  sudo systemctl restart cube-agent.service || no "重启服务" "失败"
+fi
 for i in $(seq 1 25); do
   [ "$(curl -s -o /dev/null -w '%{http_code}' -m 2 "$BASE/healthz")" = 200 ] && { ok "重启后恢复" "${i}s"; break; }
   sleep 1
