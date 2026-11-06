@@ -184,3 +184,4 @@ sudo journalctl -u cube-agent-restore-drill.service -n 20 # 期望最后一行 p
 - 对照：`https://www.cloudflare.com/` 5/5 成功，`https://1.1.1.1/` 0/5
 - 结论：**丢包发生在出网链路/边缘路径，不是应用缺陷**；所有公网验收脚本都需对 `000`/`502` 重试
 - 因此：**判定以本机验收为准**；公网结论只在多次重试成功时才算数
+- **吞吐上限**：`/api/runs` 受 runs 桶限流（**20/分/IP**）。并发冒烟时超过该值会拿到 429，`scripts/concurrency-smoke.sh` 会自动等待 62s 重试一次；这不是故障，是设计

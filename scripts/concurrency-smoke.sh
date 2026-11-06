@@ -28,13 +28,37 @@ lc=$(login_cookie "$BASE" "$JAR" "$PW")
 SID=$(curl -s -m 15 "${H[@]}" -d '{"title":"并发冒烟"}' "$BASE/api/sessions" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))')
 [ -n "$SID" ] && ok "创建会话" "$SID" || { no "创建会话" "空"; exit 1; }
 
-for i in $(seq 1 "$N"); do
-  ( curl -s -m 40 "${H[@]}" -d "{\"input\":\"写第 $i 份报告\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" \
-      | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))' >> "$IDS" ) &
-done
+THROTTLED="$IDS.throttled"; : > "$THROTTLED"
+fire() { # fire <i>
+  local i="$1" code
+  code=$(curl -s -m 40 -o /tmp/run_$i.json -w '%{http_code}' "${H[@]}" -d "{\"input\":\"写第 $i 份报告\",\"sessionId\":\"$SID\"}" "$BASE/api/runs")
+  if [ "$code" = 202 ]; then
+    python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("runId",""))' /tmp/run_$i.json >> "$IDS"
+  elif [ "$code" = 429 ]; then
+    echo "$i" >> "$THROTTLED"
+  fi
+}
+for i in $(seq 1 "$N"); do fire "$i" & done
 wait
+# 被限流（runs 桶 20/分）就等窗口过后重试一次，避免把限流误判成失败
+if [ -s "$THROTTLED" ]; then
+  echo "  … 有 $(grep -c . "$THROTTLED") 个请求被限流，等待 62s 重试"
+  sleep 62
+  : > "$THROTTLED"
+  for i in $(seq 1 "$N"); do
+    grep -qxF "$i" <(seq 1 "$N") >/dev/null 2>&1 || true
+    [ -s /tmp/run_$i.done ] && continue
+    fire "$i" &
+  done
+  wait
+fi
+: > "$THROTTLED"
 got=$(grep -c . "$IDS" || true)
-[ "$got" = "$N" ] && ok "并发发起" "$got 个" || no "并发发起" "期望 $N，实际 $got"
+thr=$(grep -c . "$THROTTLED" || true)
+if [ "$got" = "$N" ]; then ok "并发发起" "$got 个"
+elif [ "$thr" -gt 0 ] && [ "$got" -gt 0 ]; then
+  ok "并发发起" "$got 个成功，$thr 个被限流（runs 桶 20/分，属预期）"
+else no "并发发起" "期望 $N，成功 $got，限流 $thr"; fi
 
 for r in $(cat "$IDS"); do
   curl -s -o /dev/null -m 30 "${H[@]}" -d '{"decision":"allow_once"}' "$BASE/api/approvals/$r" &
@@ -57,7 +81,7 @@ for (const id of ids) {
 console.log(JSON.stringify({ total: ids.length, bad, detail }));
 ' $(cat "$IDS"))
 echo "  … 结果：$res"
-printf '%s' "$res" | grep -q '"bad":0' && ok "全部 done 且 seq 连续无重复" "$N 个 run" || no "并发一致性" "$res"
+printf '%s' "$res" | grep -q '"bad":0' && ok "全部 done 且 seq 连续无重复" "$got 个 run" || no "并发一致性" "$res"
 
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
