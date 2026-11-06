@@ -287,8 +287,9 @@ kbd {
 .title-input { font: inherit; color: inherit; background: var(--n00); border: 1px solid var(--blue600); border-radius: 6px; padding: 2px 8px; min-width: 160px; }
 #title[tabindex] { cursor: text; }
 .card.approval[data-decision] .actions { display: none; }
-.card.approval .decided { padding: 8px 16px 12px; font-size: 12px; color: var(--n700); }
+.card.approval .decided { margin-left: auto; font-size: 12px; color: var(--n700); }
 .card.approval[data-decision="deny"] .decided { color: #b42318; }
+.card-head .decided { flex: none; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .grant-item { font-size: 12px; color: var(--n700); padding: 4px 0; }
 

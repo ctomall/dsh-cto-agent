@@ -140,9 +140,10 @@ function approvalCard(p) {
   const DECISION_TEXT = { deny: '已拒绝', allow_once: '已允许一次', allow_session: '已允许本会话', session_grant: '已自动放行（会话授权）' }
   const markDecided = (decision) => {
     card.dataset.decision = decision
-    const note = card.querySelector('.decided') ?? el('div', 'decided')
-    note.textContent = DECISION_TEXT[decision] ?? String(decision)
-    if (!note.parentElement) card.append(note)
+    // 结果显示在表头右侧：卡片可能很长，放底部会被折叠线挡住
+    const tag = head.querySelector('.decided') ?? el('span', 'decided')
+    tag.textContent = DECISION_TEXT[decision] ?? String(decision)
+    if (!tag.parentElement) head.append(tag)
   }
   const decide = async (decision) => {
     if (state.decided) return
