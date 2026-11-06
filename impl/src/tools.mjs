@@ -15,10 +15,10 @@ export function createTools({ workspaceRoot }) {
     const root = resolve(workspaceRoot, runId)
     const abs = inside(root, p)
     if (!abs) throw new Error(`path outside workspace: ${p}`)
-    await mkdir(root, { recursive: true })
+    await mkdir(root, { recursive: true, mode: 0o700 })
     const realRoot = await realpath(root)
     const dir = dirname(abs)
-    if (create) await mkdir(dir, { recursive: true })
+    if (create) await mkdir(dir, { recursive: true, mode: 0o700 })
     const realDir = await realpath(dir)
     if (realDir !== realRoot && !realDir.startsWith(realRoot + sep)) {
       throw new Error(`path outside workspace: ${p}`)
@@ -52,7 +52,8 @@ export function createTools({ workspaceRoot }) {
       }
       if (name === 'fs.write') {
         const { root, abs } = await guard(runId, args.path, { create: true })
-        await writeFile(abs, String(args.content ?? ''), 'utf8')
+        // 0600：租户产物不该被同机其他用户读到
+        await writeFile(abs, String(args.content ?? ''), { encoding: 'utf8', mode: 0o600 })
         return { content: `已写入 ${abs}`, artifact: { path: args.path, mime: 'text/markdown', size: Buffer.byteLength(String(args.content ?? '')) }, root }
       }
       throw new Error(`unknown tool: ${name}`)

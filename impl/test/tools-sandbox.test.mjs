@@ -43,3 +43,13 @@ test('符号链接读取同样被拒', async (t) => {
   symlinkSync(outside, join(root, 'r1', 'link'))
   await assert.rejects(() => tools.run('fs.read', { path: 'link/secret.txt' }, 'r1'), /path outside workspace|ENOENT/)
 })
+
+test('产物权限：目录 0700、文件 0600（同机其他用户不可读）', { skip: process.platform === 'win32' }, async (t) => {
+  const { statSync } = await import('node:fs')
+  const { root, tools } = mkws(t)
+  await tools.run('fs.write', { path: 'secret/report.md', content: 'x' }, 'r1')
+  const dirMode = statSync(join(root, 'r1', 'secret')).mode & 0o777
+  const fileMode = statSync(join(root, 'r1', 'secret', 'report.md')).mode & 0o777
+  assert.equal(dirMode, 0o700, `目录权限应为 700，实际 ${dirMode.toString(8)}`)
+  assert.equal(fileMode, 0o600, `文件权限应为 600，实际 ${fileMode.toString(8)}`)
+})
