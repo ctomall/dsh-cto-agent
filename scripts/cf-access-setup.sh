@@ -18,7 +18,7 @@ else
   : "${CLOUDFLARE_API_TOKEN:=<dry-run>}" "${CF_ACCOUNT_ID:=<dry-run>}" "${CF_ZONE_ID:=<dry-run>}" "${ALLOW_EMAILS:=someone@example.com}"
 fi
 
-API="https://api.cloudflare.com/client/v4"
+API="${CF_API_BASE:-https://api.cloudflare.com/client/v4}"   # 可用 CF_API_BASE 指向本地 mock 做自测
 
 # 1) Access 应用（self-hosted，覆盖整个域名）
 APP_PAYLOAD=$(cat <<JSON
@@ -95,9 +95,14 @@ app_id=$(printf '%s' "$app" | python3 -c 'import json,sys; d=json.load(sys.stdin
 [ -n "$app_id" ] || { echo "FAIL: 创建 Access 应用失败：$app" >&2; exit 3; }
 echo "== Access 应用已创建：$app_id"
 
-curl -sS -X POST "$API/accounts/$CF_ACCOUNT_ID/access/apps/$app_id/policies" "${hdr[@]}" -d "$POLICY_PAYLOAD" >/dev/null
+# 每一步都必须检查 success：把失败当成功打印，等于"配了个寂寞"却以为配好了
+pol=$(curl -sS -X POST "$API/accounts/$CF_ACCOUNT_ID/access/apps/$app_id/policies" "${hdr[@]}" -d "$POLICY_PAYLOAD")
+printf '%s' "$pol" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("success") else 1)' \
+  || { echo "FAIL: 创建 allow 策略失败（Access 应用已建但没有放行规则）：$pol" >&2; exit 4; }
 echo "== 策略已创建（允许 ${ALLOW_EMAILS}）"
 
-curl -sS -X PUT "$API/zones/$CF_ZONE_ID/rulesets/phases/http_ratelimit/entrypoint" "${hdr[@]}" -d "$RATELIMIT_PAYLOAD" >/dev/null
+rl=$(curl -sS -X PUT "$API/zones/$CF_ZONE_ID/rulesets/phases/http_ratelimit/entrypoint" "${hdr[@]}" -d "$RATELIMIT_PAYLOAD")
+printf '%s' "$rl" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("success") else 1)' \
+  || { echo "FAIL: 写入边缘限流失败（Access 生效但无限流）：$rl" >&2; exit 5; }
 echo "== 边缘速率限制已配置"
 echo "== 完成：访问 https://$HOST 应被 Access 拦截"
