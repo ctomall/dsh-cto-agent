@@ -72,6 +72,14 @@ console.log(JSON.stringify({
 ' "$RUN" 2>/dev/null)
 echo "  … 统计：$stats"
 printf '%s' "$stats" | grep -q '"status":"done"' && ok "run 终态 done" done || no "run 终态 done" "$stats"
+
+# 硬杀之后库必须仍然完整（WAL + 单写者；这是"数据没坏"的直接证据，不是推断）
+ic=$(node -e '
+const {DatabaseSync}=require("node:sqlite");
+const d=new DatabaseSync(process.env.DB??"/var/lib/cube-agent/cube.db",{readOnly:true});
+console.log(d.prepare("pragma integrity_check").get().integrity_check);
+' 2>&1)
+[ "$ic" = "ok" ] && ok "SIGKILL 后库完整" "integrity_check=ok" || no "SIGKILL 后库完整" "$ic"
 printf '%s' "$stats" | grep -q '"artifacts":1' && ok "产物事件唯一" 1 || no "产物事件唯一" "$stats"
 printf '%s' "$stats" | grep -q '"tools":1' && ok "工具只执行一次" 1 || no "工具只执行一次" "$stats"
 
