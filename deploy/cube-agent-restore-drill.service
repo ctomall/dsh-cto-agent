@@ -1,0 +1,12 @@
+[Unit]
+Description=Cube Agent 恢复演练（用最新备份起临时实例，含损坏识别负向用例）
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pro
+ExecStart=/opt/cube-agent/scripts/restore-drill.sh 8798 --from-latest
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=300

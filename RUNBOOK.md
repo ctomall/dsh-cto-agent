@@ -148,6 +148,16 @@ ls -la /var/backups/cube-agent                     # 产物（默认保留最近
 - 每日 03:30 触发，`Persistent=true`（关机错过会在开机后补跑），`RandomizedDelaySec=300`
 - 备份脚本自带逐表行数校验；不一致会 `exit 1`，journal 里能直接看到
 
+## 每月自动恢复演练（systemd timer）
+
+```bash
+systemctl list-timers cube-agent-restore-drill.timer     # 每月 1 日 04:30
+sudo systemctl start cube-agent-restore-drill.service     # 立即跑一次
+sudo journalctl -u cube-agent-restore-drill.service -n 20 # 期望最后一行 pass=7 fail=0
+```
+
+单元文件在 `deploy/cube-agent-restore-drill.{service,timer}`，端口固定 8798（临时实例，跑完即退）。
+
 ## 恢复演练（用定时器产出的那份备份）
 
 ```bash

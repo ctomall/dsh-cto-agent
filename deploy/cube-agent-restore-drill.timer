@@ -1,0 +1,10 @@
+[Unit]
+Description=每月恢复演练（1 日 04:30，错过则开机补跑）
+
+[Timer]
+OnCalendar=*-*-01 04:30
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
