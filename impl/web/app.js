@@ -137,12 +137,28 @@ function approvalCard(p) {
   const once = el('button', 'btn primary', '允许一次')
   actions.append(deny, sess, once)
 
+  const DECISION_TEXT = { deny: '已拒绝', allow_once: '已允许一次', allow_session: '已允许本会话', session_grant: '已自动放行（会话授权）' }
+  const markDecided = (decision) => {
+    card.dataset.decision = decision
+    const note = card.querySelector('.decided') ?? el('div', 'decided')
+    note.textContent = DECISION_TEXT[decision] ?? String(decision)
+    if (!note.parentElement) card.append(note)
+  }
   const decide = async (decision) => {
     if (state.decided) return
     state.decided = true
     for (const b of [deny, once, sess]) b.disabled = true
-    await api(`/api/approvals/${runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
+    const { status } = await api(`/api/approvals/${runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
+    if (status === 200) {
+      markDecided(decision)
+    } else {
+      // 失败要让用户能重试：恢复按钮并提示
+      state.decided = false
+      for (const b of [deny, once, sess]) b.disabled = false
+      setStatus(`审批失败（${status}）`, 'error')
+    }
   }
+  card.__markDecided = markDecided
   deny.addEventListener('click', () => decide('deny'))
   once.addEventListener('click', () => decide('allow_once'))
   sess.addEventListener('click', () => decide('allow_session'))
@@ -221,6 +237,9 @@ function handleEvent(type, p) {
     autoNote(p)
     setStatus('自动放行 · 执行中', 'running')
   } else if (type === 'approval.decided') {
+    const key = `${runId}:${p.callId ?? ''}`
+    const c = state.approvalCards?.get(key)
+    if (c?.__markDecided) c.__markDecided(p.decision)
     if (p.decision === 'deny') setToolState(p.callId, 'muted', '已拒绝')
     else setToolState(p.callId, 'running', '执行中')
     if (p.decision === 'allow_session') loadGrants()
