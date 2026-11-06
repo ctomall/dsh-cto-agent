@@ -279,7 +279,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     'Referrer-Policy': 'no-referrer',
     'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
   }
-  return createServer(async (req, res) => {
+  // 兜底：任何未预料的异常都要回一个 500，而不是让连接一直挂着
+  const onRequest = async (req, res) => {
     const url = new URL(req.url, 'http://local')
     const origWriteHead = res.writeHead.bind(res)
     res.writeHead = (status, headers) => {
@@ -893,6 +894,17 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     }
 
     reply(res, handleRequest(db, req, ctxOf))
+  }
+
+  return createServer((req, res) => {
+    onRequest(req, res).catch((e) => {
+      // 未预料的异常：必须把连接收掉，否则客户端会一直等（实测会挂到超时）
+      console.error('[cube-agent] 未处理异常：', e?.message ?? e)
+      try {
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ error: 'internal_error' }))
+      } catch {}
+    })
   })
 }
 
