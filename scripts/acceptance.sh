@@ -84,18 +84,57 @@ if [ -d "$DEPLOY_DIR/.git" ]; then
 fi
 
 echo "== ① 真实模型 loop"
+# 判据（对应目标原文）：模型选工具 → 审批 → 产出，且事件序列由模型行为决定。
+# 真实模型第一步可能要几十秒，所以全部用"轮询 replay 事件"而不是一次性读流。
+evwait() { # evwait <runId> <pattern> <timeout_s>
+  local rid="$1" pat="$2" tmo="${3:-120}" i
+  for i in $(seq 1 "$tmo"); do
+    local txt
+    txt=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 15 "$BASE/api/runs/$rid/events?replay=1" 2>/dev/null)
+    echo "$txt" | grep -q "$pat" && { printf '%s' "$txt"; return 0; }
+    sleep 1
+  done
+  printf '%s' "$txt"
+  return 1
+}
 ms=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 20 "$BASE/api/model/status" 2>/dev/null)
 if echo "$ms" | grep -q '"real":true'; then
   body=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 \
     -d '{"input":"写一份验收报告","sessionId":"s_a1"}' "$BASE/api/runs")
   rid=$(echo "$body" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))' 2>/dev/null)
   drv=$(echo "$body" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("driver",""))' 2>/dev/null)
+  echo "$drv" | grep -q '^fake' && no "driver 非 fake" "$drv" || ok "driver 非 fake" "$drv"
+
   if [ -n "$rid" ]; then
-    ev=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$rid/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
-    echo "$ev" | grep -q "approval.requested" || echo "$ev" | grep -q "tool.started"
-    [ $? -eq 0 ] && ok "run 由模型工具驱动" "driver=$drv" || no "run 由模型工具驱动" "$ev"
-    echo "$drv" | grep -q '^fake' && no "driver 非 fake" "$drv" || ok "driver 非 fake" "$drv"
-  else no "创建 run" "$body"; fi
+    # 1) 模型必须真的调用工具（不是硬编码序列）
+    if ev=$(evwait "$rid" "event: tool.started" 180); then
+      ok "模型选择了工具" "tool.started"
+    else
+      no "模型选择了工具" "$(echo "$ev" | grep '^event:' | tr '\n' ' ' | head -c 160)"
+    fi
+    # 2) 覆盖写必须落到审批（暂停）
+    if ev=$(evwait "$rid" "event: approval.requested" 120); then
+      ok "审批暂停" "approval.requested"
+      # 3) 批准后必须真的产出（恢复 → 工具执行 → 产物 → 收尾）
+      curl -s -o /dev/null -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 30 \
+        -d '{"decision":"allow_once"}' "$BASE/api/approvals/$rid"
+      if ev2=$(evwait "$rid" "event: artifact.created" 180); then
+        ok "审批后产出" "artifact.created"
+        if evwait "$rid" "event: run.finished" 120 >/dev/null; then
+          ok "run 正常收尾" "run.finished"
+        else
+          no "run 正常收尾" "$(echo "$ev2" | grep '^event:' | tr '\n' ' ' | head -c 160)"
+        fi
+      else
+        no "审批后产出" "$(echo "$ev2" | grep '^event:' | tr '\n' ' ' | head -c 160)"
+      fi
+    else
+      no "审批暂停" "$(echo "$ev" | grep '^event:' | tr '\n' ' ' | head -c 160)"
+    fi
+    curl -s -o /dev/null -m 20 -b "$JAR" -H "Authorization: Bearer $T_A" -X POST "$BASE/api/runs/$rid/cancel" || true
+  else
+    no "创建 run" "$body"
+  fi
 else
   sk "① 真实模型" "未配置 MODEL_*，放行见 HANDOFF.md ①（$(echo "$ms" | head -c 48)）"
 fi
