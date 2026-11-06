@@ -85,6 +85,25 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 | 文档↔代码欠账 | `CONFORMANCE.md` |
 | 阻塞说明 | `HANDOFF.md` |
 
+## 全面复验记录（2026-11-06 07:5x UTC）
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| 全量测试 | `node --test impl/test/*.test.mjs` | **175 / 175** |
+| 目标验收 | `./scripts/acceptance.sh http://127.0.0.1:8787` | pass=20 fail=0 skip=2 |
+| 一键复核 | `./scripts/verify-all.sh` | pass=6 fail=0 skip=1 |
+| 恢复演练（最新备份） | `./scripts/restore-drill.sh 8797 --from-latest` | pass=7 fail=0 |
+| 孤儿 run 收敛 | `./scripts/orphan-drill.sh 8798` | pass=7 fail=0 |
+| 重启韧性（SIGKILL） | `sudo ./scripts/restart-drill.sh … --sigkill` | pass=9 fail=0 |
+| 并发冒烟（8 路） | `./scripts/concurrency-smoke.sh http://127.0.0.1:8787 8` | pass=4 fail=0 |
+| 密钥外泄（日志/库） | `./scripts/secret-leak-scan.sh` | pass=3 fail=0 |
+| 文档对账 | `./scripts/docs-check.sh` | pass=8 fail=0 |
+
+运行态：`sessions 194 / runs 513 / events 3837 / audit 501 / running 0 / waiting 0`，线上 SHA `3d476c0`。
+
+公网抽样（各 3 次）：`/healthz 200,000,200`、`/login 200,200,200`、`/api/sessions 401,401,000`；
+同一时刻本机 `200,200,200` —— **丢包在出网链路**，见 RUNBOOK「公网链路现状」。
+
 ## 当前结论（2026-11-06）
 
 <!-- acceptance: pass=20 fail=0 skip=2 -->
