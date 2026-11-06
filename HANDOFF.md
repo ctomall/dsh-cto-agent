@@ -32,31 +32,25 @@
 
 **缺什么**：`MODEL_BASE_URL` / `MODEL_NAME` / `MODEL_API_KEY`（或 `MODEL_API_KEY_FILE`）。
 
-**放行步骤**
+**放行步骤**（2026-11-06 修订：原来的第 1/2 步与 `unblock.sh` 重复，已合并）
 
 ```bash
-# 1) 写入密钥（0600，不入库）
-sudo install -m 600 /dev/null /etc/cube-agent/model.key
-sudo tee /etc/cube-agent/model.key >/dev/null <<'KEY'
-<你的 key>
-KEY
+# 0) 先验端点兼容性（不发真实业务请求，只探形状）——这一步能避免"接上才发现不兼容"
+node scripts/provider-conformance.mjs --base <BASE_URL> --model <MODEL> --key <KEY>
 
-# 2) 写进服务环境
-sudo tee -a /etc/cube-agent/env >/dev/null <<'ENV'
-MODEL_BASE_URL=https://api.deepseek.com/v1
-MODEL_NAME=deepseek-chat
-MODEL_API_KEY_FILE=/etc/cube-agent/model.key
-ENV
+# 1) 一条命令完成：写 key(0600) + 写 env 三行 + 重启 + 探针 + 端到端
+#    （--probe 真发一次请求；--verify 跑「目标→模型选工具→审批→产出」）
+scripts/unblock.sh --model-key '<KEY>' --base-url <BASE_URL> --model <MODEL> --probe --verify
 
-# 3) 一条命令：写盘 → 重启 → 探针 → 端到端（目标→工具→审批→产出）
-scripts/unblock.sh --model-key "$(cat /etc/cube-agent/model.key)" --verify
-
-# 4) 重启并要求验收器必须有 ① PASS
-sudo systemctl restart cube-agent.service
-./scripts/acceptance.sh --require-all
+# 2) 看 ① 是否 PASS（逐步输出，不依赖 --require-all）
+./scripts/acceptance.sh | sed -n '/== ①/,/== ②/p'
 ```
 
-**验收判据**：`/api/model/status` 返回 `real:true`；`acceptance.sh` 的 ① 变为 ✔ 且跑通一次「模型选择工具 → 审批 → 产物」。
+> **注意**：此时**不要**用 `acceptance.sh --require-all`——③ 仍是 SKIP，require-all 会按设计返回 3。
+> ① 的五条断言行（driver 非 fake / 模型选择了工具 / 审批暂停 / 审批后产出 / run 正常收尾）全 ✔ 即算通过。
+
+**验收判据**：`/api/model/status` 返回 `real:true`；`first-real-run.sh` 打印「① 真实链路通过」；
+验收器 ① 段五行全绿（可用 `scripts/check-acceptance-with-mock-model.sh` 先看"全绿长什么样"）。
 
 **回滚**：删掉 `/etc/cube-agent/env` 里的 `MODEL_*` 三行 → 重启（会退回 fake，`model_real` 变 0）。
 
