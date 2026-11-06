@@ -80,3 +80,45 @@ test('备份文件权限 0600（库里是全租户数据）', { skip: process.pl
   const mode = statSync(r.outPath).mode & 0o777
   assert.equal(mode, 0o600, `备份权限应为 600，实际 ${mode.toString(8)}`)
 })
+
+test('保留策略：只留最近 N 份，且不误删非备份文件', async (t) => {
+  const { mkdtempSync, writeFileSync, readdirSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { pruneBackups } = await import('../src/backup.mjs')
+
+  const dir = mkdtempSync(join(tmpdir(), 'cube-prune-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+
+  // 造 6 份备份（文件名格式必须匹配）与 1 个无关文件
+  for (let i = 1; i <= 6; i++) {
+    writeFileSync(join(dir, `cube-2026010${i}-000000.db`), 'x')
+  }
+  writeFileSync(join(dir, 'README.txt'), '不是备份')
+
+  const removed = pruneBackups(dir, 2)
+  assert.equal(removed.length, 4, `应删除 4 份，实际 ${removed.length}`)
+  const left = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
+  assert.deepEqual(left, ['cube-20260105-000000.db', 'cube-20260106-000000.db'], '应保留最新两份')
+  assert.ok(readdirSync(dir).includes('README.txt'), '无关文件不能被删')
+
+  // 目录不存在时安全返回
+  assert.deepEqual(pruneBackups(join(dir, 'nope'), 2), [])
+})
+
+test('备份文件权限为 600（含全租户数据，不能让同机其他用户读到）', async (t) => {
+  const { mkdtempSync, statSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const { backupDb } = await import('../src/backup.mjs')
+
+  const dir = mkdtempSync(join(tmpdir(), 'cube-perm-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const dbPath = join(dir, 'cube.db')
+  const db = openDb(dbPath); seedTwoTenants(db); db.close()
+
+  const r = backupDb({ dbPath, outDir: join(dir, 'bak') })
+  const mode = statSync(r.outPath).mode & 0o777
+  assert.equal(mode, 0o600, `备份文件权限应为 600，实际 ${mode.toString(8)}`)
+})
