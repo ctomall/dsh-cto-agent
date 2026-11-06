@@ -113,3 +113,6 @@ curl -s -o /dev/null -w '%{http_code}\n' https://cto.ila3.top/        # 期望 3
 - **不要直接改 `/opt/cube-agent` 里的文件**：验收器的「部署目录干净」会立刻红；改代码只改开发工作区并走提交推送
 - 密钥只进 `/etc/cube-agent/`（0600）或环境变量，**永不入库**
 - 验收器报 SKIP 就如实记录 SKIP，不要改判据凑 PASS
+
+> ③ 拿到凭据后：`./scripts/check-cf-edge.sh`；无凭据可用 `EDGE_ONLY=1` 只验边缘行为。
+> 现状实测（2026-11-07）：未授权仍落在应用层 `/login`、升级接口返回应用层 401 —— 边缘未上。
