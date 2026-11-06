@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+// 会话行删除的干净校验：停在「保留会话」上，删除另一个会话（避免导航换掉 JS 上下文）。
+// 用法：CK=<cookie> KEEP=<当前会话> TITLE=<被删会话标题> node scripts/cdp-delete-row-check.mjs
+const CK = process.env.CK, KEEP = process.env.KEEP, TITLE = process.env.TITLE, BASE = 'http://127.0.0.1:8787'
+const t = await (await fetch('http://127.0.0.1:9222/json/new?about:blank', { method: 'PUT' })).json()
+const ws = new WebSocket(t.webSocketDebuggerUrl)
+let id = 0; const pend = new Map()
+const raw = (m, p = {}, ms = 15000) => Promise.race([new Promise((res, rej) => { const i = ++id; pend.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method: m, params: p })) }), new Promise((_, rej) => setTimeout(() => rej(new Error('超时 ' + m)), ms))])
+ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { const { res, rej } = pend.get(m.id); pend.delete(m.id); m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result) } })
+await new Promise((r) => ws.addEventListener('open', r, { once: true }))
+const ev = async (x) => (await raw('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true })).result?.value
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+await raw('Runtime.enable'); await raw('Page.enable'); await raw('Network.enable')
+await raw('Network.setCookie', { name: 'cube_session', value: CK, domain: '127.0.0.1', path: '/', httpOnly: true })
+// 停在「保留会话」上，删除另一个会话，避免导航换掉 JS 上下文
+await raw('Page.navigate', { url: `${BASE}/?sid=${KEEP}` }, 25000)
+await sleep(2500)
+const before = await ev(`[...document.querySelectorAll('#sessions li')].filter(l => l.textContent.includes(${JSON.stringify(TITLE)})).length`)
+await ev(`(() => { const li=[...document.querySelectorAll('#sessions li')].find(l=>l.textContent.includes(${JSON.stringify(TITLE)})); const b=li.querySelector('.row-del'); b.click(); b.click(); return true })()`)
+await sleep(1500)
+const after = await ev(`[...document.querySelectorAll('#sessions li')].filter(l => l.textContent.includes(${JSON.stringify(TITLE)})).length`)
+console.log(JSON.stringify({ before, after }))
+await raw('Page.close', {}, 5000).catch(() => {}); ws.close()
