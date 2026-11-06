@@ -60,3 +60,9 @@ test('页面脚本都必须有 fetch 超时（公网丢包不能把页面卡死�
     assert.equal(bare.length, 0, `${f} 仍有裸 fetch：\n${bare.join('\n')}`)
   }
 })
+
+test('审批卡必须说明"参数被截断"（不能让人以为模型只写了这么多）', () => {
+  const js = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.match(js, /argsTruncated/, 'app.js 未处理 argsTruncated')
+  assert.match(js, /已截断显示/, '缺少截断提示文案')
+})

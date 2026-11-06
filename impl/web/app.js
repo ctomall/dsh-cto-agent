@@ -154,6 +154,10 @@ function approvalCard(p) {
   const det = document.createElement('details')
   det.append(el('summary', null, '参数'))
   det.append(el('pre', null, pretty(p.args)))
+  // 参数过长时后端只发摘要：必须说清"这不是全文"，否则用户会以为模型只写了这么多
+  if (p.argsTruncated) {
+    det.append(el('p', 'muted', '参数较长，已截断显示；实际执行使用完整内容'))
+  }
   body.append(det)
 
   const actions = el('div', 'actions')
