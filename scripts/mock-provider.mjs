@@ -22,7 +22,10 @@ createServer((req, res) => {
     // 非流式也要能答：探针/连通性检查常用一次性请求
     if (!streaming) {
       res.writeHead(200, { 'content-type': 'application/json' })
-      return res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }] }))
+      return res.end(JSON.stringify({
+        choices: [{ message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 11, completion_tokens: 3, total_tokens: 14 },
+      }))
     }
     // 按对话内容判断轮次：还没有 tool 结果 → 先给 tool_call；有了 → 给最终文本
     // （不能用请求计数：探针/重试都会打乱奇偶）

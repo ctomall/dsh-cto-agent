@@ -74,6 +74,7 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
           let buf = ''
           let text = ''
           const calls = []
+          let usage = null
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
@@ -87,6 +88,7 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
               if (payload === '[DONE]') continue
               let chunk
               try { chunk = JSON.parse(payload) } catch { continue }
+              if (chunk.usage) usage = chunk.usage
               const delta = chunk.choices?.[0]?.delta ?? {}
               if (delta.content) {
                 text += delta.content
@@ -107,9 +109,9 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
             try { args = JSON.parse(first.arguments || '{}') } catch { args = {} }
             // 并行 tool_call：loop 一次只执行一个，多出来的必须显式回报，不能静默丢弃
             const others = calls.filter((c, i) => c && c !== first).map((c) => ({ id: c.id, name: c.name }))
-            return { type: 'tool_call', call: { id: first.id, name: first.name, args }, others }
+            return { type: 'tool_call', call: { id: first.id, name: first.name, args }, others, usage }
           }
-          return { type: 'final', text }
+          return { type: 'final', text, usage }
         }
 
         const j = await res.json()
@@ -119,9 +121,9 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
           let args = {}
           try { args = JSON.parse(tc.function.arguments || '{}') } catch { args = {} }
           const others = msg.tool_calls.slice(1).map((c) => ({ id: c.id, name: c.function?.name ?? '' }))
-          return { type: 'tool_call', call: { id: tc.id, name: tc.function.name, args }, others }
+          return { type: 'tool_call', call: { id: tc.id, name: tc.function.name, args }, others, usage: j.usage ?? null }
         }
-        return { type: 'final', text: msg.content ?? '' }
+        return { type: 'final', text: msg.content ?? '', usage: j.usage ?? null }
       } finally {
         clearTimeout(timer)
       }

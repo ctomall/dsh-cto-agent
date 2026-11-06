@@ -171,6 +171,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     grants,
     workspaceRoot: WORKSPACE_ROOT,
     timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
+    onUsage: (u) => {
+      for (const k of ['prompt_tokens', 'completion_tokens', 'total_tokens']) {
+        const v = Number(u?.[k])
+        if (Number.isFinite(v) && v > 0) metrics.inc(`model_${k}_total`, {}, v)
+      }
+    },
     maxSteps: numEnv('AGENT_MAX_STEPS', 10),
     historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
     loadHistory: ({ tenantId, sessionId, limit }) => {
@@ -499,6 +505,12 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         agent: {
           maxSteps: numEnv('AGENT_MAX_STEPS', 10),
           timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
+    onUsage: (u) => {
+      for (const k of ['prompt_tokens', 'completion_tokens', 'total_tokens']) {
+        const v = Number(u?.[k])
+        if (Number.isFinite(v) && v > 0) metrics.inc(`model_${k}_total`, {}, v)
+      }
+    },
           historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
           historyChars: numEnv('AGENT_HISTORY_CHARS', 8_000),
         },

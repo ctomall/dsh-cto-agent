@@ -1,7 +1,7 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 import { TERMINAL } from './runs.mjs'
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null, toolResults = null }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null, toolResults = null, onUsage = null }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
@@ -15,6 +15,8 @@ export class AgentLoop {
     this.pendingStore = pendingStore
     this.toolResults = toolResults
     this.maxSteps = maxSteps
+    this.onUsage = onUsage
+    this.usage = null
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
     this.aborts = new Map() // runId -> { ctrl, reason }  （用户取消 / 超时共用）
   }
@@ -49,6 +51,14 @@ export class AgentLoop {
     let decision
     try {
       decision = await this.driver.complete({ messages, tools: this.tools.schema, onDelta, signal: entry.ctrl.signal })
+      if (decision?.usage) {
+        this.usage = this.usage ?? {}
+        for (const k of ['prompt_tokens', 'completion_tokens', 'total_tokens']) {
+          const v = Number(decision.usage[k])
+          if (Number.isFinite(v)) this.usage[k] = (this.usage[k] ?? 0) + v
+        }
+        this.onUsage?.(decision.usage)
+      }
     } catch (e) {
       if (entry.reason === 'user') return { status: 'canceled' } // cancel() 已发过事件
       const timedOut = entry.reason === 'timeout' || entry.ctrl.signal.aborted
@@ -70,7 +80,7 @@ export class AgentLoop {
         this.store?.({ tenantId, sessionId, runId, role: 'assistant', content: decision.text })
       }
       this.rc.transition(runId, 'done')
-      this.rc.emitTo(runId, 'run.finished', { runId, ok: true })
+      this.rc.emitTo(runId, 'run.finished', { runId, ok: true, ...(this.usage ? { usage: this.usage } : {}) })
       return { status: 'done' }
     }
 
