@@ -3,11 +3,17 @@
 # 用法：APP_PASSWORD_FILE=.runtime-app-password scripts/verify-online.sh [https://cto.ila3.top]
 set -uo pipefail
 BASE="${1:-https://cto.ila3.top}"
+. scripts/lib-login.sh
 PW_FILE="${APP_PASSWORD_FILE:-.runtime-app-password}"
 pass=0; fail=0
 ok() { printf '  ✔ %-42s %s\n' "$1" "$2"; pass=$((pass+1)); }
 no() { printf '  ✖ %-42s %s\n' "$1" "$2"; fail=$((fail+1)); }
-code() { curl -s -o /dev/null -w '%{http_code}' -m 15 "$@"; }
+code() {
+  local c
+  c=$(curl -s -o /dev/null -w '%{http_code}' -m 25 "$@") || c="000"
+  if [ "$c" = "000" ]; then sleep 2; c=$(curl -s -o /dev/null -w '%{http_code}' -m 25 "$@") || c="000"; fi
+  printf '%s' "$c"
+}
 
 echo "== 1) 等待就绪（/healthz，最多 40s）"
 ready=0
