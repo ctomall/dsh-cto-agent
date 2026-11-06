@@ -183,6 +183,28 @@ sudo journalctl -u cube-agent-restore-drill.service -n 20 # 期望最后一行 p
 - 分协议抽样：`--http2` 7/10、`--http1.1` 2/10；`--ipv6` 全部立即失败（本机无 IPv6 出口）
 - 对照：`https://www.cloudflare.com/` 5/5 成功，`https://1.1.1.1/` 0/5
 - 结论：**丢包发生在出网链路/边缘路径，不是应用缺陷**；所有公网验收脚本都需对 `000`/`502` 重试
+
+### 根因与修复（2026-11-06 二轮排障）
+
+对照 `www.cloudflare.com` 也是 **7/10**，说明与我们的域名/隧道无关，而是**本机→边缘**的链路问题。继续量：
+
+```
+ping -M do -s 1472 1.1.1.1  → 100% packet loss   （1500 MTU 走不通）
+ping -M do -s 1372 1.1.1.1  → 0% loss           （1400 MTU 正常）
+sysctl net.ipv4.tcp_mtu_probing → 0             （内核对 PMTU 黑洞不做探测）
+```
+
+即 **路径 MTU < 1500 + 不探测 = PMTU 黑洞**：大包被静默丢弃，表现为随机超时/530。
+
+**处置**：`net.ipv4.tcp_mtu_probing=1`（持久化到 `/etc/sysctl.d/99-mtu-probing.conf`），
+并 `systemctl restart cloudflared-cto`（旧连接按旧 MSS 建立，必须重建）。同一测法前后对比：
+
+| 阶段 | 公网 `/healthz` |
+|---|---|
+| 改前（3 组 ×10） | 7/10、7/10、7/10 |
+| 改后（3 组 ×10） | **9/10、10/10、10/10** |
+
+公网验收自此完整跑通：`pass=12 fail=0 skip=0`。公网脚本仍保留「时间预算重试 + 000 记 SKIP」作为兜底。
 - 因此：**判定以本机验收为准**；公网结论只在多次重试成功时才算数
 - **吞吐上限**：`/api/runs` 受 runs 桶限流（**20/分/IP**）。并发冒烟时超过该值会拿到 429，`scripts/concurrency-smoke.sh` 会自动等待 62s 重试一次；这不是故障，是设计
 
