@@ -66,6 +66,7 @@ function ensureAssistant() {
 }
 
 function toolCard({ tool, callId }) {
+  if (state.toolCards.has(callId)) return state.toolCards.get(callId).card
   const card = el('div', 'card tool')
   const head = el('div', 'card-head')
   const caret = el('span', 'caret', '▸')
@@ -112,6 +113,10 @@ function setToolState(callId, kind, text) {
 }
 
 function approvalCard(p) {
+  const runId = p.runId || state.runId
+  const key = `${runId}:${p.callId ?? ''}`
+  state.approvalCards ??= new Map()
+  if (state.approvalCards.has(key)) return state.approvalCards.get(key)
   const card = el('div', 'card approval')
   const head = el('div', 'card-head')
   head.append(el('span', 'title', `需要你确认 · ${label(p.action)}`))
@@ -136,7 +141,7 @@ function approvalCard(p) {
     if (state.decided) return
     state.decided = true
     for (const b of [deny, once, sess]) b.disabled = true
-    await api(`/api/approvals/${state.runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
+    await api(`/api/approvals/${runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
   }
   deny.addEventListener('click', () => decide('deny'))
   once.addEventListener('click', () => decide('allow_once'))
@@ -144,6 +149,7 @@ function approvalCard(p) {
 
   card.append(head, body, actions)
   streamInner().append(card)
+  state.approvalCards.set(key, card)
   return card
 }
 
@@ -234,8 +240,10 @@ function handleEvent(type, p) {
   }
 }
 
-function subscribe(runId) {
-  const es = new EventSource(`/api/runs/${runId}/events?token=${encodeURIComponent(token)}`)
+function subscribe(runId, { lastEventId = 0 } = {}) {
+  const q = new URLSearchParams({ token })
+  if (lastEventId) q.set('lastEventId', String(lastEventId))
+  const es = new EventSource(`/api/runs/${runId}/events?${q.toString()}`)
   state.es = es
   for (const t of [
     'text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved',
@@ -258,6 +266,32 @@ async function send(text) {
   if (status !== 202) { setStatus('提交失败', 'done'); return }
   state.runId = body.runId
   subscribe(body.runId)
+}
+
+// 刷新/重开页面后，把仍在等待的审批卡还原出来（并重新订阅事件）
+async function loadPending() {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/pending`)
+  if (status !== 200 || !body.pending?.length) return
+  for (const p of body.pending) {
+    state.runId = p.runId
+    state.decided = false
+    approvalCard({ runId: p.runId, action: p.tool, target: p.target, impact: p.impact, args: p.args, callId: p.callId })
+    // 从「当前最后一条事件」开始订阅：既拿到后续进展，又不把已渲染的旧事件再放一遍
+    const seq = await lastSeq(p.runId)
+    subscribe(p.runId, { lastEventId: seq })
+  }
+  setStatus('等待你确认', 'waiting')
+}
+
+async function lastSeq(runId) {
+  try {
+    const res = await fetch(`/api/runs/${runId}/events?replay=1&token=${encodeURIComponent(token)}`)
+    const text = await res.text()
+    const ids = [...text.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]))
+    return ids.length ? Math.max(...ids) : 0
+  } catch {
+    return 0
+  }
 }
 
 async function loadHistory() {
@@ -327,6 +361,7 @@ async function boot() {
   }
 
   await loadHistory()
+  await loadPending()
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
 

@@ -336,6 +336,30 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { ok: true, driver: driver.name }))
     }
 
+    // —— 会话内待审批：刷新/重开页面后仍能把审批卡还原出来 ——
+    const pd = /^\/api\/sessions\/([^/]+)\/pending$/.exec(url.pathname)
+    if (req.method === 'GET' && pd) {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const sessionId = decodeURIComponent(pd[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      const runs = db
+        .prepare("select id from runs where tenant_id = ? and session_id = ? and status = 'waiting_approval' order by started_at")
+        .all(ctx.tenantId, sessionId)
+      const pending = []
+      for (const r of runs) {
+        const ev = db
+          .prepare("select payload_json from events where run_id = ? and type = 'approval.requested' order by seq desc limit 1")
+          .get(r.id)
+        if (!ev) continue
+        let p = {}
+        try { p = JSON.parse(ev.payload_json) } catch {}
+        pending.push({ runId: r.id, callId: p.callId ?? null, tool: p.action ?? null, target: p.target ?? null, impact: p.impact ?? null, args: p.args ?? null })
+      }
+      return reply(res, json(200, { pending }))
+    }
+
     // —— 总览：只读聚合（租户内），给 /overview 页面用 ——
     if (req.method === 'GET' && url.pathname === '/api/overview') {
       const ctx = ctxOf(req)
