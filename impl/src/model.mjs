@@ -120,8 +120,10 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
           const tc = msg.tool_calls[0]
           let args = {}
           try { args = JSON.parse(tc.function.arguments || '{}') } catch { args = {} }
-          const others = msg.tool_calls.slice(1).map((c) => ({ id: c.id, name: c.function?.name ?? '' }))
-          return { type: 'tool_call', call: { id: tc.id, name: tc.function.name, args }, others, usage: j.usage ?? null }
+          const others = msg.tool_calls.slice(1).map((c, i) => ({ id: c.id ?? `call_${i + 1}`, name: c.function?.name ?? '' }))
+          // 有些兼容网关不给 tool_call.id：必须补默认值，否则后续 tool 消息的 tool_call_id 是 undefined
+          const id = tc.id ?? 'call_0'
+          return { type: 'tool_call', call: { id, name: tc.function.name, args }, others, usage: j.usage ?? null }
         }
         return { type: 'final', text: msg.content ?? '', usage: j.usage ?? null }
       } finally {
