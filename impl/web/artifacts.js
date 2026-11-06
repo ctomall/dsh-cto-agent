@@ -18,7 +18,8 @@ const fmt = (n) => (n == null ? '-' : n < 1024 ? `${n} B` : `${(n / 1024).toFixe
 async function main() {
   const me = await api('/api/me')
   if (me.status === 401) { location.href = '/login'; return }
-  if (me.body?.sha) $('#build').textContent = `build ${me.body.sha}`
+  const ver = await api('/api/version')
+  if (ver.status === 200 && ver.body?.sha) $('#build').textContent = `build ${ver.body.sha}`
 
   const drv = await api('/api/model/status')
   if (drv.status === 200) {
