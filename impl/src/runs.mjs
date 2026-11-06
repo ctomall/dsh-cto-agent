@@ -84,23 +84,6 @@ export class RunController {
     return this.log.lastSeq(runId)
   }
 
-  // 前端用：创建 run → 跑到需要审批处停下（真正挂起，不是假装慢）
-  startToApproval(runId, { cmd = 'shell.exec', input = '' } = {}) {
-    this.create(runId)
-    this.transition(runId, 'running')
-    this.emitTo(runId, 'text.delta', { text: `收到目标：${input || '(空)'}` })
-    this.emitTo(runId, 'tool.started', { tool: cmd, callId: `${runId}-c1` })
-    this.transition(runId, 'waiting_approval')
-    this.emitTo(runId, 'approval.requested', {
-      callId: `${runId}-c1`,
-      action: cmd,
-      target: `/data/tenants/t_a/workspace/${runId}/report.md`,
-      impact: '创建文件（可撤销：删除该文件）',
-      args: { cmd: 'ls -la', cwd: '.' },
-    })
-    return runId
-  }
-
   // 审批决定 → 恢复或拒绝
   decideApproval(runId, decision) {
     const callId = `${runId}-c1`
