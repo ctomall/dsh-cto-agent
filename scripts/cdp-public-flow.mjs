@@ -73,7 +73,9 @@ const out = await ev(`({
   finished: document.body.textContent.includes('完成') || document.body.textContent.includes('done'),
   title: document.title,
 })`)
-console.log(JSON.stringify(out))
+// 结论：公网页面必须完成 登录→输入→审批→产物 这一整条；缺任何一环都算没走通
+const ok = Number(out.artifacts) >= 1 && !!out.artifactName && out.decided === true && out.finished === true
+console.log(JSON.stringify({ ...out, verdict: { ok } }))
 const shot = await raw('Page.captureScreenshot', { format: 'png' }, 30000)
 ;(await import('node:fs')).writeFileSync('/tmp/public-flow.png', Buffer.from(shot.data, 'base64'))
 await raw('Page.close', {}, 5000).catch(() => {})

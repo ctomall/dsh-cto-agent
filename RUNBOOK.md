@@ -271,7 +271,7 @@ node scripts/gen-scripts-index.mjs   # 重建 scripts/README.md
 
 | 脚本 | 验证什么 | 现状 |
 |---|---|---|
-| `cdp-public-flow.mjs` | 公网页面全链路：登录 → 输入目标 → 审批卡 → 允许一次 → 产物 | 在用 |
+| `cdp-public-flow.mjs` | 公网页面全链路：登录 → 输入目标 → 审批卡 → 允许一次 → 产物（**实测通过，verdict.ok=true**） | 在用 |
 | `cdp-public-pages.mjs` | 公网 Cookie 模式下四页（总览/产物/设置/工作台）都能出数据 | 在用 |
 | `cdp-grant-ui-check.mjs` | ② 的 UI 承诺：同会话第二次不再弹卡，改显示「已按会话授权放行」 | 在用 |
 | `cdp-cross-session-check.mjs` | ② 的另一半：跨会话必须重新弹卡 | 在用 |
