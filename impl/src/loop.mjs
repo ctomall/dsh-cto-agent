@@ -21,7 +21,7 @@ function trimArgsForEvent(args, limit = 512) {
   return { args: walk(args), truncated }
 }
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null, toolResults = null, onUsage = null }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null, toolResults = null, onUsage = null, artifactExists = null }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
@@ -34,6 +34,7 @@ export class AgentLoop {
     this.timeoutMs = timeoutMs
     this.pendingStore = pendingStore
     this.toolResults = toolResults
+    this.artifactExists = artifactExists
     this.maxSteps = maxSteps
     this.onUsage = onUsage
     this.usage = null
@@ -193,6 +194,11 @@ export class AgentLoop {
     const cached = this.toolResults?.get(runId, callId)
     if (cached) {
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: !!cached.ok, replayed: true, error: cached.error ?? undefined })
+      // 崩溃窗口：工具执行完、artifact 事件还没落库就重启了。
+      // 补发一次；事件流里已有则不重复（界面是按事件追加卡片的）
+      if (cached.artifact && this.artifactExists && !this.artifactExists(runId, cached.artifact.path)) {
+        this.rc.emitTo(runId, 'artifact.created', { ...cached.artifact, replayed: true })
+      }
       messages.push({ role: 'tool', tool_call_id: callId, content: cached.content })
       return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
     }

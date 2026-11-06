@@ -182,6 +182,11 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
     grants,
     workspaceRoot: WORKSPACE_ROOT,
     timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
+    // 崩溃窗口补发：事件流里是否已有该产物
+    artifactExists: (runId, path) =>
+      !!db
+        .prepare("select 1 from events where run_id = ? and type = 'artifact.created' and json_extract(payload_json,'$.path') = ?")
+        .get(runId, String(path)),
     onUsage: (u) => {
       for (const k of ['prompt_tokens', 'completion_tokens', 'total_tokens']) {
         const v = Number(u?.[k])
@@ -206,7 +211,9 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       get: (runId, callId) => {
         const r = db.prepare('select * from run_tool_results where run_id = ? and call_id = ?').get(runId, callId)
         if (!r) return null
-        return { ok: r.ok, content: r.content, error: r.error }
+        let artifact = null
+        try { artifact = r.artifact_json ? JSON.parse(r.artifact_json) : null } catch { artifact = null }
+        return { ok: r.ok, content: r.content, error: r.error, artifact }
       },
       put: ({ runId, callId, ok, content, artifact, error }) =>
         db
