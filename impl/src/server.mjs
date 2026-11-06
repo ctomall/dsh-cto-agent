@@ -488,6 +488,9 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (ctx.error) { res.writeHead(401, { 'content-type': 'application/json' }); return res.end('{"error":"unauthenticated"}') }
       const runId = decodeURIComponent(evm[1])
       if (!rc.status(runId)) { res.writeHead(404); return res.end() }
+      // 租户归属：事件流里有工具参数、目标路径与助手文本，跨租户一律 404
+      const evOwner = db.prepare('select tenant_id from runs where id = ?').get(runId)
+      if (!evOwner || evOwner.tenant_id !== ctx.tenantId) { res.writeHead(404); return res.end() }
       const lastEventId = parseLastEventId(req.headers['last-event-id'], url.searchParams.get('lastEventId'))
       // replay=1：只回放快照后关闭（轮询/测试用）；默认保持长连接实时推送
       if (url.searchParams.get('replay') === '1') {

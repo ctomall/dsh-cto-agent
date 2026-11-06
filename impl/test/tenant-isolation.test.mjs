@@ -118,3 +118,22 @@ test('跨租户审批 → 404（知道 runId 也不能批）', async (t) => {
   })
   assert.equal(r.status, 404)
 })
+
+test('跨租户读事件流 → 404（事件里有参数、路径与文本）', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const A = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+  const B = { 'content-type': 'application/json', authorization: 'Bearer tok_b' }
+
+  const { id: sid } = await (await fetch(`${base}/api/sessions`, { method: 'POST', headers: A, body: JSON.stringify({ title: '事件隔离' }) })).json()
+  const { runId } = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: A, body: JSON.stringify({ input: '写一份报告', sessionId: sid }) })).json()
+  await new Promise((r) => setTimeout(r, 200))
+
+  assert.equal((await fetch(`${base}/api/runs/${runId}/events?replay=1`, { headers: A })).status, 200, '本租户可读')
+  assert.equal((await fetch(`${base}/api/runs/${runId}/events?replay=1`, { headers: B })).status, 404, '跨租户必须 404')
+})
