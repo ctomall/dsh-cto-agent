@@ -333,8 +333,11 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         res.writeHead(302, { location: '/', 'set-cookie': gate.cookie({ secure: https }), 'cache-control': 'no-store' })
         return res.end()
       }
+      // 口令错时把"还能试几次"说出来：否则用户只能闭眼重试，直到被限流踢出去
+      const left = Number(res.getHeader('x-ratelimit-remaining'))
+      const hint = Number.isFinite(left) && left >= 0 ? `（本分钟还可试 ${left} 次）` : ''
       res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-      return res.end(LOGIN_HTML.replace('<!--ERR-->', '<p class="err">口令不正确</p>'))
+      return res.end(LOGIN_HTML.replace('<!--ERR-->', `<p class="err">口令不正确${hint}</p>`))
     }
 
     // —— 产物下载/预览：租户校验 + 工作区路径约束（浏览器 <a> 带不了 header，故允许 ?token=）——
