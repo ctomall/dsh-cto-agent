@@ -80,3 +80,12 @@
 首页 `/` 仍 **302** 到登录；同时合法 Cookie 仍正常放行（避免把正常路径也挡了）。
 
 公网实测（同一时刻）：无 Cookie → `302 / 401`；带伪造 CF 头 → 仍 `302 / 401`。
+
+## 鉴权优先级（2026-11-06）
+
+- 请求若带 `Authorization: Bearer <token>`，**只按 bearer 鉴权**；bearer 无效即 **401**，
+  **不会回退**到 Cookie。理由：显式凭据失败必须报错，静默回退会掩盖客户端的配置错误。
+- 只有在**没有** `Authorization` 头时才使用口令门 Cookie。
+- 例外（刻意）：产物下载路由 `/api/artifacts/...` 允许在 bearer 失败后回退到 Cookie，
+  因为浏览器点链接带不了请求头；租户归属仍按解析出的身份校验。
+- 已用用例钉住：`cookieAuthed` 必须排除带 Authorization 的请求；`ctxOf` 有 bearer 时以 bearer 为准。

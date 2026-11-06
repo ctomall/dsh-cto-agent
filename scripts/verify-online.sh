@@ -40,21 +40,23 @@ echo "== 2) 身份门"
 [ "$(code "$BASE/api/sessions")" = "401" ] && ok "未登录 API" "401" || no "未登录 API" "期望 401"
 
 echo "== 3) 登录后放行"
-if [ -f "$PW_FILE" ]; then
-  PW=$(cut -d= -f2- "$PW_FILE")
+# 口令来源：环境变量 PW > $APP_PASSWORD_FILE（默认 .runtime-app-password）
+PW="${PW:-$(cut -d= -f2- "$PW_FILE" 2>/dev/null)}"
+if [ -n "${PW:-}" ]; then
   jar=$(mktemp)
   lc=$(require_login "$BASE" "$jar" "$PW") || lc="000"
   [ "$lc" = "302" ] && ok "登录提交" "302" || no "登录提交" "期望 302，实际 $lc"
   pc=$(code2 -b "$jar" "$BASE/")
   [ "$pc" = "200" ] && ok "带 Cookie 首页" "200" || no "带 Cookie 首页" "期望 200，实际 $pc（隧道慢时可能 000）"
-  T_A=$(cut -d= -f2- .runtime-tokens 2>/dev/null | head -1)
+  # token 来源：环境变量 TOK_A > .runtime-tokens
+  T_A="${TOK_A:-$(cut -d= -f2- .runtime-tokens 2>/dev/null | head -1)}"
   if [ -n "${T_A:-}" ]; then
     ms=$(curl -s -b "$jar" -H "Authorization: Bearer $T_A" -m 15 "$BASE/api/model/status")
     echo "$ms" | grep -q '"driver"' && ok "model/status" "$(echo "$ms" | head -c 80)" || no "model/status" "$ms"
   fi
   rm -f "$jar"
 else
-  no "登录后放行" "缺少口令文件 $PW_FILE"
+  no "登录后放行" "缺少口令（设置 PW 环境变量或 $PW_FILE）"
 fi
 
 echo "== 4) 安全响应头（公网实际返回，不是本机）"

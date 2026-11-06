@@ -72,3 +72,9 @@ test('同一 run 只能有一条 SSE 连接（loadActive 与 send 会争着订�
   assert.match(js, /state\.esRunId === runId/, '缺少"同 run 单连接"守卫')
   assert.match(js, /state\.lastSeq = seq/, '未记录已收到的事件序号（重订阅会从 0 重放）')
 })
+
+test('鉴权优先级：带 Authorization 时只认 bearer（坏 bearer 不得回退到 Cookie）', () => {
+  const js = readFileSync(new URL('../src/server.mjs', import.meta.url), 'utf8')
+  assert.match(js, /const cookieAuthed = \(req\) => !req\.headers\?\.authorization/, 'cookie 回退必须排除"带 Authorization"的请求')
+  assert.match(js, /if \(auth\) return resolveContext\(auth\)/, '有 Authorization 时必须以 bearer 为准')
+})
