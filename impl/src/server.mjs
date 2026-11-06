@@ -139,6 +139,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   const metrics = createMetrics()
   // 0 值也要出现在 /metrics 里，否则"没数据"和"没这个指标"分不清
   metrics.inc('runs_created_total', { driver: 'fake' }, 0)
+  // 预注册为 0：桩驱动不产生 usage，但看板应当永远能查到这三条序列
+  for (const k of ['prompt_tokens', 'completion_tokens', 'total_tokens']) metrics.inc(`model_${k}_total`, {}, 0)
   metrics.inc('runs_created_total', { driver: 'real' }, 0)
   for (const d of ['allow_once', 'allow_session', 'deny']) metrics.inc('approvals_total', { decision: d }, 0)
   for (const b of ['api', 'runs', 'upgrade', 'login']) metrics.inc('rate_limited_total', { bucket: b }, 0)
