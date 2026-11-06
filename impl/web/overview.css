@@ -7,7 +7,8 @@
 :root {
   --n00: #ffffff; --n50: #f9fafb; --n55: #f5f7fa; --n75: #f1f3f5; --n100: #ebeef2;
   --n200: #e1e5ee; --n300: #cfd3d6; --n400: #adb2b8; --n500: #979da6; --n600: #81858c;
-  --n700: #61666b; --n1000: #0f1115;
+  --n700: #61666b;
+  --ink-meta: #656a70; /* 元信息专用：白底 5.2:1，满足 AA */ --n1000: #0f1115;
   --blue500: #3b82f6; --violet600: #7c3aed; --green500: #22c55e; --amber500: #f59e0b; --red600: #ec1313;
   --line-1: rgba(0,0,0,.04); --line-2: rgba(0,0,0,.10); --line-3: rgba(0,0,0,.12);
   --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
@@ -33,7 +34,7 @@ body {
 }
 h1, h2 { margin: 0; }
 .mono, .meta, .statusbar, time, .code, .metric, .count { font-family: "JetBrains Mono", "SF Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-.meta { font-size: 11px; color: var(--n500); }
+.meta { font-size: 11px; color: var(--ink-meta); }
 .muted { color: var(--n600); font-size: 12px; }
 
 /* 三栏 + 底部通栏（DSH shell.bottom） */
@@ -59,7 +60,7 @@ h1, h2 { margin: 0; }
   font-family: "Montserrat", system-ui, sans-serif;
   font-size: 15px; font-weight: 500; letter-spacing: .2px; white-space: nowrap;
 }
-.brand span { color: var(--n500); font-weight: 300; }
+.brand span { color: var(--ink-meta); font-weight: 300; }
 .icon-btn {
   width: 24px; height: 24px; flex: none;
   display: grid; place-items: center;
@@ -82,7 +83,7 @@ h1, h2 { margin: 0; }
 }
 .nav-item:hover { background: var(--n75); color: var(--n1000); }
 .nav-item.active { background: var(--n75); color: var(--n1000); font-weight: 500; }
-.nav-item .ico { width: 20px; height: 16px; flex: none; color: var(--n500); }
+.nav-item .ico { width: 20px; height: 16px; flex: none; color: var(--ink-meta); }
 .nav-item:hover .ico, .nav-item.active .ico { color: var(--n1000); }
 .nav-item .badge {
   margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px;
@@ -139,7 +140,7 @@ h1, h2 { margin: 0; }
 .block { display: grid; gap: 8px; }
 .block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .block-head h2 { font-size: 13px; font-weight: 600; color: var(--n1000); }
-.note { margin: 0; font-size: 11px; color: var(--n500); }
+.note { margin: 0; font-size: 11px; color: var(--ink-meta); }
 
 .list {
   background: var(--n00);
@@ -165,9 +166,9 @@ h1, h2 { margin: 0; }
 }
 .row .name { font-size: 13px; font-weight: 500; }
 .row .name .cn { color: var(--n700); font-weight: 400; margin-left: 8px; }
-.row .desc { font-size: 11px; color: var(--n500); margin-top: 1px; }
+.row .desc { font-size: 11px; color: var(--ink-meta); margin-top: 1px; }
 .metric { font-size: 12px; color: var(--n1000); white-space: nowrap; }
-.metric .unit { color: var(--n500); }
+.metric .unit { color: var(--ink-meta); }
 
 .tag {
   display: inline-flex; align-items: center; gap: 5px;
@@ -186,9 +187,9 @@ h1, h2 { margin: 0; }
 .count { font-size: 12px; color: var(--n700); }
 
 .row-audit { grid-template-columns: 26px 62px minmax(0, 1fr); padding: 7px 16px; }
-.row-audit .no, .row-audit time { font-size: 11px; color: var(--n500); }
+.row-audit .no, .row-audit time { font-size: 11px; color: var(--ink-meta); }
 .row-audit .act { font-size: 13px; color: var(--n700); }
-.empty { padding: 14px 16px; color: var(--n500); font-size: 12px; }
+.empty { padding: 14px 16px; color: var(--ink-meta); font-size: 12px; }
 
 /* ——— 右侧 edge 面板：按需打开，占 45%，保底给中栏 400px ——— */
 .panel {
@@ -226,7 +227,7 @@ h1, h2 { margin: 0; }
   display: flex; align-items: center; gap: 16px;
   height: var(--status-h); padding: 0 16px;
   background: var(--n00); border-top: 1px solid var(--line-2);
-  font-size: 11px; color: var(--n500);
+  font-size: 11px; color: var(--ink-meta);
 }
 .statusbar .spacer { flex: 1; }
 
