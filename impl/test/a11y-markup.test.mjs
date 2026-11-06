@@ -78,3 +78,9 @@ test('鉴权优先级：带 Authorization 时只认 bearer（坏 bearer 不得�
   assert.match(js, /const cookieAuthed = \(req\) => !req\.headers\?\.authorization/, 'cookie 回退必须排除"带 Authorization"的请求')
   assert.match(js, /if \(auth\) return resolveContext\(auth\)/, '有 Authorization 时必须以 bearer 为准')
 })
+
+test('前端处理 409 active_run：接管已有 run 而不是再创建一条', () => {
+  const js = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.match(js, /active_run/, 'app.js 未处理 active_run')
+  assert.match(js, /正在接管它的输出/, '缺少接管提示文案')
+})

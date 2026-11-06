@@ -357,6 +357,20 @@ async function send(text) {
     state.sessionId = made.body.id
     history.replaceState(null, '', `/?sid=${encodeURIComponent(state.sessionId)}`)
   }
+  // 跨标签页/跨设备的同一性问题：这个会话若已有 run 在跑，就接管它而不是再创建一个
+  // （界面上的 inflight 只覆盖当前页面；另一个标签页看不见它）
+  try {
+    const act = await api(`/api/sessions/${state.sessionId}/active`)
+    const running = (act.body?.active ?? []).find((a) => a.status === 'running')
+    if (running) {
+      state.runId = running.runId
+      state.inflight = true
+      subscribe(running.runId, { lastEventId: running.lastSeq })
+      setStatus('已有任务在跑，已接管这次输出（未重复创建）', 'running')
+      return
+    }
+  } catch { /* 查询失败就按正常流程走 */ }
+
   addUser(text)
   state.assistant = null
   state.decided = false
@@ -365,6 +379,14 @@ async function send(text) {
   setStatus('已提交', 'running')
   const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
   if (status === 429) { state.inflight = false; setStatus(rateLimitedText(body, '发送'), 'error'); return }
+  if (status === 409 && body?.error === 'active_run') {
+    // 别的标签页/设备已经在跑：接管它的输出，不再创建第二条
+    state.runId = body.runId
+    state.inflight = true
+    subscribe(body.runId)
+    setStatus('已有任务在跑，正在接管它的输出', 'running')
+    return
+  }
   if (status !== 202) { state.inflight = false; setStatus('提交失败', 'done'); return }
   state.runId = body.runId
   subscribe(body.runId)

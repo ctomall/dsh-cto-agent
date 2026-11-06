@@ -737,6 +737,14 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         .get(sessionId, ctx.tenantId)
       if (!owned) return reply(res, json(404, { error: 'not_found' }))
 
+      // 同一会话同时只允许一条"正在执行"的 run：多个标签页/多台设备同时提交时，
+      // 第二个应在源头上被拒（否则真模型下是两笔计费）。等待审批的 run 不算，
+      // 因为一个会话里可以有多条待审批。
+      const busy = db
+        .prepare("select id from runs where tenant_id = ? and session_id = ? and status = 'running' order by started_at desc limit 1")
+        .get(ctx.tenantId, sessionId)
+      if (busy) return reply(res, json(409, { error: 'active_run', runId: busy.id }))
+
       const runId = `r${Date.now()}${(seq++).toString(36)}`
       // 模型 loop：事件序列由 driver 决策产生，不是硬编码；跑到审批处会挂起
       metrics.inc('runs_created_total', { driver: driver.name.startsWith('fake') ? 'fake' : 'real' })
