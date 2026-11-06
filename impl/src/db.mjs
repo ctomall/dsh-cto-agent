@@ -61,6 +61,17 @@ export function openDb(path = ':memory:') {
       created_at text not null
     );
 
+    create table if not exists run_tool_results (
+      run_id text not null,
+      call_id text not null,
+      ok integer not null,
+      content text not null,
+      artifact_json text,
+      error text,
+      created_at text not null,
+      primary key (run_id, call_id)
+    );
+
     create table if not exists events (
       run_id text not null,
       seq integer not null,

@@ -149,6 +149,19 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         .all(tenantId, sessionId, Number(limit))
         .reverse()
         .map((r) => ({ role: r.role, content: r.content })),
+    toolResults: {
+      get: (runId, callId) => {
+        const r = db.prepare('select * from run_tool_results where run_id = ? and call_id = ?').get(runId, callId)
+        if (!r) return null
+        return { ok: r.ok, content: r.content, error: r.error }
+      },
+      put: ({ runId, callId, ok, content, artifact, error }) =>
+        db
+          .prepare(
+            'insert or replace into run_tool_results (run_id, call_id, ok, content, artifact_json, error, created_at) values (?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(runId, callId, ok, content, artifact ? JSON.stringify(artifact) : null, error, new Date().toISOString()),
+    },
     pendingStore: {
       save: ({ runId, tenantId, sessionId, messages, call, callId, steps }) =>
         db

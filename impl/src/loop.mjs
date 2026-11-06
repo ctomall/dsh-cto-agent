@@ -1,7 +1,7 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 import { TERMINAL } from './runs.mjs'
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null, toolResults = null }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
@@ -13,6 +13,7 @@ export class AgentLoop {
     this.historyLimit = historyLimit
     this.timeoutMs = timeoutMs
     this.pendingStore = pendingStore
+    this.toolResults = toolResults
     this.maxSteps = maxSteps
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
     this.aborts = new Map() // runId -> { ctrl, reason }  （用户取消 / 超时共用）
@@ -115,14 +116,23 @@ export class AgentLoop {
   }
 
   async executeAndContinue({ runId, messages, call, callId, steps, tenantId, sessionId }) {
+    // 幂等：同一 (runId, callId) 只真正执行一次。审批/重试/崩溃恢复都可能再次走到这里。
+    const cached = this.toolResults?.get(runId, callId)
+    if (cached) {
+      this.rc.emitTo(runId, 'tool.finished', { callId, ok: !!cached.ok, replayed: true, error: cached.error ?? undefined })
+      messages.push({ role: 'tool', tool_call_id: callId, content: cached.content })
+      return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
+    }
     try {
       const out = await this.tools.run(call.name, call.args, runId)
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: true, truncated: false })
       if (out.artifact) this.rc.emitTo(runId, 'artifact.created', out.artifact)
       messages.push({ role: 'tool', tool_call_id: callId, content: out.content })
+      this.toolResults?.put({ runId, callId, ok: 1, content: out.content, artifact: out.artifact ?? null, error: null })
     } catch (e) {
       this.rc.emitTo(runId, 'tool.finished', { callId, ok: false, error: String(e.message) })
       messages.push({ role: 'tool', tool_call_id: callId, content: `error: ${e.message}` })
+      this.toolResults?.put({ runId, callId, ok: 0, content: `error: ${e.message}`, artifact: null, error: String(e.message) })
     }
     return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
   }
