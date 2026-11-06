@@ -413,6 +413,23 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { grants: grants.list({ tenantId: ctx.tenantId, sessionId }) }))
     }
 
+    // —— 审计读取：audit_log 之前只写不读（SECURITY.md 记的缺口），补一个租户内只读视图 ——
+    if (req.method === 'GET' && url.pathname === '/api/audit') {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const limitRaw = Number(url.searchParams.get('limit') ?? 50)
+      const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? Math.trunc(limitRaw) : 50, 1), 200)
+      const rows = db
+        .prepare('select id, tenant_id, actor, action, detail_json, ts from audit_log where tenant_id = ? order by rowid desc limit ?')
+        .all(ctx.tenantId, limit)
+      const items = rows.map((r) => {
+        let detail = null
+        try { detail = JSON.parse(r.detail_json) } catch {}
+        return { id: r.id, actor: r.actor, action: r.action, detail, ts: r.ts }
+      })
+      return reply(res, json(200, { audit: items, limit }))
+    }
+
     // —— 会话内待审批：刷新/重开页面后仍能把审批卡还原出来 ——
     const pd = /^\/api\/sessions\/([^/]+)\/pending$/.exec(url.pathname)
     if (req.method === 'GET' && pd) {
