@@ -375,6 +375,8 @@ async function startRename() {
     loadSessions().catch(() => {})
   }
   input.addEventListener('keydown', (e) => {
+    // 阻止冒泡：title 上也有 keydown 监听，否则回车会重新进入编辑态
+    e.stopPropagation()
     if (e.key === 'Enter') { e.preventDefault(); finish(true) }
     else if (e.key === 'Escape') { e.preventDefault(); finish(false) }
   })
@@ -460,7 +462,10 @@ async function boot() {
   const titleEl = $('#title')
   if (titleEl) {
     titleEl.addEventListener('dblclick', startRename)
-    titleEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startRename() } })
+    titleEl.addEventListener('keydown', (e) => {
+      if (e.target !== titleEl) return // 输入框内的按键交给输入框处理
+      if (e.key === 'Enter') { e.preventDefault(); startRename() }
+    })
   }
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
@@ -481,12 +486,6 @@ $('#revoke').addEventListener('click', async () => {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
   if (status === 200) {
     await loadGrants()
-  await loadArtifacts()
-  const titleEl = $('#title')
-  if (titleEl) {
-    titleEl.addEventListener('dblclick', startRename)
-    titleEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startRename() } })
-  }
     if (!body.revoked) $('#grants').textContent = '没有可撤销的授权'
   } else {
     $('#grants').textContent = `撤销失败（${status}）`
