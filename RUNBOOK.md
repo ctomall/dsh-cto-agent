@@ -264,5 +264,12 @@ node scripts/gen-scripts-index.mjs   # 重建 scripts/README.md
 | `cdp-rename-check.mjs`、`cdp-session-filter-check.mjs` | 重命名、会话筛选 | 优先用 `check-session-ops.mjs` |
 | `cdp-approval-decided-check.mjs` | 审批后卡片状态与按钮禁用 | 在用 |
 
+**漂移复核（2026-11-07）**：抽了三条最关键的旧脚本，在本轮改动后重新实跑：
+- `cdp-xss-check` → `{"injectedImgs":0,"injectedScripts":0,"renderedAsText":true,"ok":true}`
+- `cdp-driver-check` → `{"text":"演示驱动（未接模型）","real":"0",…}`（如实反映未接模型）
+- `cdp-frame-check` → `iframe 嵌入结果: 不可访问`、顶层直开正常、无控制台报错
+
+其余需要额外入参的（`CK`+`SID` 的审批/跨会话检查）**本轮未跑**，用前先看脚本头部的用法行。
+
 **说明**：带"优先用 …"的几条是早期针对公网写的版本，公网链路抖动会让它们不稳定；
 同名的确定性覆盖已移到 `check-*.mjs`（临时实例 + CDP），**保留旧脚本作为历史证据，不再作为门禁**。
