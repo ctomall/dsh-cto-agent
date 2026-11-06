@@ -57,6 +57,16 @@ else
   no "登录后放行" "缺少口令文件 $PW_FILE"
 fi
 
+echo "== 4) 安全响应头（公网实际返回，不是本机）"
+hdr=$(curl -s -D - -o /dev/null -m 25 "$BASE/login")
+for want in "content-security-policy" "x-frame-options" "x-content-type-options" "referrer-policy"; do
+  if printf '%s' "$hdr" | grep -qi "^$want:"; then ok "响应头 $want" "$(printf '%s' "$hdr" | grep -i "^$want:" | head -1 | cut -c1-60)"; else no "响应头 $want" "缺失"; fi
+done
+
+echo "== 5) 升级接口仅限授权主体（不带 token 必须 401）"
+uc=$(code2 -X POST "$BASE/api/admin/upgrade")
+[ "$uc" = "401" ] && ok "升级无 token" "401" || no "升级无 token" "期望 401，实际 $uc（000 为公网丢包）"
+
 echo
 echo "== 结果：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
