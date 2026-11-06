@@ -1,6 +1,14 @@
 // 在线一键升级：只允许 git fetch / pull --ff-only，不允许 reset --hard 或 clean。
 // 安全口径：未配置 token 时接口整体关闭（fail-closed），不是"忘配就裸奔"。
 import { execFile } from 'node:child_process'
+import { createHash, timingSafeEqual } from 'node:crypto'
+
+// 常量时间比较：避免通过响应时间侧信道推断 token
+const safeEqual = (a, b) => {
+  const ha = createHash('sha256').update(String(a ?? '')).digest()
+  const hb = createHash('sha256').update(String(b ?? '')).digest()
+  return timingSafeEqual(ha, hb)
+}
 
 export class UpgradeError extends Error {
   constructor(code, message, status) {
@@ -100,7 +108,7 @@ export function createUpgradeRoute({ token, upgradeOnce }) {
       return { status: 503, body: { error: 'upgrade_disabled', detail: 'CUBE_UPGRADE_TOKEN is not configured' } }
     }
     const got = req.headers?.['x-upgrade-token']
-    if (!got || got !== token) {
+    if (!got || !safeEqual(got, token)) {
       return { status: 401, body: { error: 'unauthenticated' } }
     }
     try {

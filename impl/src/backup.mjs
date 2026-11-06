@@ -10,10 +10,12 @@ export const KEY_TABLES = [
 ]
 
 export function countTables(dbPath, tables = KEY_TABLES) {
+  // 表名只允许白名单，避免将来有人把外部输入传进来做 SQL 拼接
+  const safe = tables.filter((t) => KEY_TABLES.includes(t))
   const db = new DatabaseSync(dbPath, { readOnly: true })
   try {
     const out = {}
-    for (const t of tables) {
+    for (const t of safe) {
       try { out[t] = Number(db.prepare(`select count(*) c from ${t}`).get().c) } catch { out[t] = null }
     }
     return out

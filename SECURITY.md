@@ -36,3 +36,14 @@
 - **未启用 Cloudflare Access**：公网入口只有应用层口令门
 - **Cookie 身份映射到固定租户**（`GATE_TENANT`，默认 `t_a`）：单口令部署的固有简化，多租户必须走 Bearer
 - **无审计查询接口**：`audit_log` 只写不读（只能查库）
+
+## v66–v68 新增闸门
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| 限流不可伪造 | `impl/src/ratelimit.mjs` | 仅回环/`TRUSTED_PROXIES` 可信 `cf-connecting-ip` 与 `x-forwarded-for`；直连用 socket 地址 |
+| 限流键上限 | 同上 | 默认 10k，淘汰过期键，防伪造来源造成内存增长 |
+| 请求体上限 | `impl/src/server.mjs` | `content-length > MAX_BODY_BYTES`（默认 1 MiB）→ 413 |
+| 工具沙箱按真实路径 | `impl/src/tools.mjs` | `realpath` 校验目录，挡符号链接逃逸 |
+| 升级 token 常量时间比较 | `impl/src/upgrade.mjs` | `timingSafeEqual`，避免时间侧信道 |
+| 表名白名单 | `impl/src/backup.mjs` | `countTables` 只接受已知表名，杜绝拼接 |
