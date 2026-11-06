@@ -50,6 +50,17 @@ export function openDb(path = ':memory:') {
       granted_at text not null,
       primary key (tenant_id, session_id, tool)
     );
+    create table if not exists run_pending (
+      run_id text primary key,
+      tenant_id text,
+      session_id text,
+      messages_json text not null,
+      call_json text not null,
+      call_id text not null,
+      steps integer not null default 0,
+      created_at text not null
+    );
+
     create table if not exists events (
       run_id text not null,
       seq integer not null,

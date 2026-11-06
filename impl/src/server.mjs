@@ -149,6 +149,31 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         .all(tenantId, sessionId, Number(limit))
         .reverse()
         .map((r) => ({ role: r.role, content: r.content })),
+    pendingStore: {
+      save: ({ runId, tenantId, sessionId, messages, call, callId, steps }) =>
+        db
+          .prepare(
+            'insert or replace into run_pending (run_id, tenant_id, session_id, messages_json, call_json, call_id, steps, created_at) values (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(runId, tenantId, sessionId, JSON.stringify(messages), JSON.stringify(call), callId, steps ?? 0, new Date().toISOString()),
+      load: (runId) => {
+        const r = db.prepare('select * from run_pending where run_id = ?').get(runId)
+        if (!r) return null
+        try {
+          return {
+            messages: JSON.parse(r.messages_json),
+            call: JSON.parse(r.call_json),
+            callId: r.call_id,
+            steps: r.steps,
+            tenantId: r.tenant_id,
+            sessionId: r.session_id,
+          }
+        } catch {
+          return null
+        }
+      },
+      clear: (runId) => db.prepare('delete from run_pending where run_id = ?').run(runId),
+    },
     store: ({ tenantId, sessionId, runId, role, content }) =>
       db
         .prepare('insert into messages (id, tenant_id, session_id, role, content, created_at) values (?, ?, ?, ?, ?, ?)')
@@ -161,7 +186,9 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   console.log(`[cube-agent] model driver: ${driver.name} (${driverSource})`)
   // —— 启动收敛：上个进程遗留的 running / waiting_approval 已无内存态可恢复 ——
   // 不收敛的话：页面会出现"点不动的待审批"（僵尸项），审批接口只会回 no_pending_approval。
+  const resumable = new Set(db.prepare('select run_id from run_pending').all().map((r) => r.run_id))
   for (const o of db.prepare("select id, tenant_id from runs where status in ('running', 'waiting_approval')").all()) {
+    if (resumable.has(o.id)) continue // 有落库的审批快照 → 重启后仍可继续
     const ts = new Date().toISOString()
     db.prepare('update runs set status = ?, ended_at = ? where id = ?').run('failed', ts, o.id)
     log.append(o.id, 'run.failed', { runId: o.id, error: 'interrupted_by_restart' })

@@ -1,7 +1,7 @@
 // Agent loop：事件序列由模型决策驱动，审批处真正挂起，恢复后继续同一上下文。
 import { TERMINAL } from './runs.mjs'
 export class AgentLoop {
-  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000 }) {
+  constructor({ rc, tools, driver, workspaceRoot, grants = null, audit = null, store = null, loadHistory = null, historyLimit = 20, maxSteps = 10, timeoutMs = 120_000, pendingStore = null }) {
     this.rc = rc
     this.tools = tools
     this.driver = driver
@@ -12,6 +12,7 @@ export class AgentLoop {
     this.loadHistory = loadHistory
     this.historyLimit = historyLimit
     this.timeoutMs = timeoutMs
+    this.pendingStore = pendingStore
     this.maxSteps = maxSteps
     this.pending = new Map() // runId -> { messages, call, callId, tenantId, sessionId }
     this.aborts = new Map() // runId -> { ctrl, reason }  （用户取消 / 超时共用）
@@ -95,7 +96,10 @@ export class AgentLoop {
       return this.step({ runId, messages, steps: steps + 1, tenantId, sessionId })
     }
     if (policy === 'confirm') {
-      this.pending.set(runId, { messages, call, callId, steps, tenantId, sessionId })
+      const snapshot = { messages, call, callId, steps, tenantId, sessionId }
+      this.pending.set(runId, snapshot)
+      // 落库：进程重启后仍能恢复这次审批（内存态不可跨进程）
+      this.pendingStore?.save({ runId, ...snapshot })
       this.rc.transition(runId, 'waiting_approval')
       this.rc.emitTo(runId, 'approval.requested', {
         callId,
@@ -139,10 +143,11 @@ export class AgentLoop {
   }
 
   async resume({ runId, decision }) {
-    const p = this.pending.get(runId)
+    const p = this.pending.get(runId) ?? this.pendingStore?.load(runId) ?? null
     if (!p) return { status: this.rc.status(runId), note: 'no_pending_approval' }
     this.rc.emitTo(runId, 'approval.decided', { callId: p.callId, decision })
     this.pending.delete(runId)
+    this.pendingStore?.clear(runId)
 
     if (decision === 'deny') {
       this.rc.transition(runId, 'canceled')
