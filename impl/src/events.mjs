@@ -11,11 +11,16 @@ export class EventLog {
   }
 
   append(runId, type, payload = {}) {
-    const seq = this.nextSeq(runId)
-    this.db
-      .prepare('insert into events (run_id, seq, type, payload_json, ts) values (?, ?, ?, ?, ?)')
-      .run(runId, seq, type, JSON.stringify(payload), new Date().toISOString())
-    return seq
+    // 序号分配必须与插入是同一条语句：先 max(seq)+1 再 insert 是"读后写"，
+    // 两个连接同时追加时会撞 (run_id, seq) 主键（多进程/重启重叠时真实可发生）
+    const row = this.db
+      .prepare(
+        `insert into events (run_id, seq, type, payload_json, ts)
+         values (?, (select coalesce(max(seq), 0) + 1 from events where run_id = ?), ?, ?, ?)
+         returning seq`,
+      )
+      .get(runId, runId, type, JSON.stringify(payload), new Date().toISOString())
+    return Number(row.seq)
   }
 
   // afterSeq 的语义：调用方已收到的最大 seq；只回放严格大于它的
