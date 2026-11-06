@@ -19,5 +19,7 @@ for (let i = 0; i < 7; i++) {
   out = await ev(`document.querySelector('#probe-out')?.textContent`)
   if (String(out).includes('频繁')) break
 }
-console.log('探针 429 文案:', JSON.stringify(out))
+// 结论：限流必须告诉用户"还要等多久"，否则只能盲猜重试时间
+const ok = /秒后再试|过于频繁/.test(String(out ?? '')) && /\d+/.test(String(out ?? ''))
+console.log(JSON.stringify({ text: out, verdict: { ok } }))
 await raw('Page.close', {}, 5000).catch(() => {}); ws.close()

@@ -23,5 +23,9 @@ const after = await ev(`({ count: document.querySelector('#session-count')?.text
 await ev(`(() => { const b = document.querySelector('#session-filter'); b.value = ''; b.dispatchEvent(new Event('input', { bubbles: true })); return true })()`)
 await sleep(200)
 const restored = await ev(`[...document.querySelectorAll('#sessions li')].filter(l => !l.hidden).length`)
-console.log(JSON.stringify({ total, before, focused, after, restored }))
+// 结论：筛选必须真的减少可见行，且清空后要能完全还原（不能越筛越少）
+const visibleCount = Number(after?.visible ?? after?.count?.split('/')?.[1] ?? NaN)
+const narrowed = Number.isFinite(visibleCount) && visibleCount < Number(total)
+const ok = narrowed && String(restored) === String(total)
+console.log(JSON.stringify({ total, before, focused, after, restored, verdict: { narrowed, restoredFully: String(restored) === String(total), ok } }))
 await raw('Page.close', {}, 5000).catch(() => {}); ws.close()
