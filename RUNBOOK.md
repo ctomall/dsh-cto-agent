@@ -95,3 +95,19 @@ scripts/upgrade.sh              # 拉取 → 跑全量测试 → 重启 → 等 
 ```
 
 检查三件事：运行期密钥文件是否被忽略且未被跟踪；受控文件里是否出现密钥模式（`sk-`/私钥/`ghp_`）；当前真实密钥值是否出现在工作区或提交历史。
+
+## 备份与恢复
+
+```bash
+# 在线备份（VACUUM INTO，WAL 下安全；自动逐表核对行数）
+sudo node scripts/backup.mjs --db /var/lib/cube-agent/cube.db --out /var/backups/cube-agent
+
+# 恢复
+sudo systemctl stop cube-agent
+sudo cp /var/backups/cube-agent/cube-YYYYmmdd-HHMMSS.db /var/lib/cube-agent/cube.db
+sudo rm -f /var/lib/cube-agent/cube.db-wal /var/lib/cube-agent/cube.db-shm
+sudo systemctl start cube-agent
+curl -s http://127.0.0.1:8787/healthz
+```
+
+备份脚本会在结束时比对源库与副本的逐表行数；不一致即 `exit 1`，不要拿这种快照去恢复。
