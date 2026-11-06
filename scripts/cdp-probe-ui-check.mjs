@@ -15,7 +15,17 @@ const has = await ev(`!!document.querySelector('#probe')`)
 await ev(`document.querySelector('#probe').click()`)
 await sleep(1500)
 const out = await ev(`document.querySelector('#probe-out')?.textContent`)
-console.log(JSON.stringify({ hasButton: has, result: out }))
+// 结论：按钮可用 + 结果与当前驱动状态一致（桩驱动必须明确说"先配置"；真驱动应报 ok/失败原因）
+let driverState = null
+try {
+  const r = await fetch(BASE + '/api/model/status', { headers: { cookie: `cube_session=${CK}` } })
+  driverState = (await r.json()).real ? 'real' : 'stub'
+} catch {}
+const text = String(out ?? '')
+const ok = has && text.length > 0 && (
+  driverState === 'stub' ? /桩驱动|先配置 MODEL_/.test(text) : /ok|失败|probe/i.test(text)
+)
+console.log(JSON.stringify({ hasButton: has, driverState, result: text, verdict: { ok } }))
 const s = await raw('Page.captureScreenshot', { format: 'png' }, 20000)
 ;(await import('node:fs')).writeFileSync('/tmp/settings-probe.png', Buffer.from(s.data, 'base64'))
 await raw('Page.close', {}, 5000).catch(() => {}); ws.close()
