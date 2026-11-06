@@ -336,6 +336,34 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { ok: true, driver: driver.name }))
     }
 
+    // —— 会话产物列表：刷新后产物不能凭空消失（文件还在磁盘上）——
+    const al = /^\/api\/sessions\/([^/]+)\/artifacts$/.exec(url.pathname)
+    if (req.method === 'GET' && al) {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const sessionId = decodeURIComponent(al[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      const runs = db
+        .prepare('select id from runs where tenant_id = ? and session_id = ? order by started_at')
+        .all(ctx.tenantId, sessionId)
+      const items = []
+      for (const r of runs) {
+        for (const ev of db
+          .prepare("select payload_json from events where run_id = ? and type = 'artifact.created' order by seq")
+          .all(r.id)) {
+          try {
+            const p = JSON.parse(ev.payload_json)
+            items.push({ runId: r.id, path: p.path, mime: p.mime ?? null, size: p.size ?? null })
+          } catch {}
+        }
+      }
+      // 同名产物多次生成时只留最新一份，避免面板里一排 report.md
+      const byPath = new Map()
+      for (const it of items) byPath.set(it.path, it)
+      return reply(res, json(200, { artifacts: [...byPath.values()] }))
+    }
+
     // —— 会话级授权列表：面板必须显示真实授权，而不是永远"尚未授权" ——
     const gl = /^\/api\/sessions\/([^/]+)\/grants$/.exec(url.pathname)
     if (req.method === 'GET' && gl) {

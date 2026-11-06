@@ -159,14 +159,14 @@ function autoNote(p) {
   streamInner().append(note)
 }
 
-function artifactNode(p) {
+function artifactNode(p, runId = state.runId) {
   const card = el('div', 'artifact')
   const ico = el('div', 'ico-box')
   ico.innerHTML = FILE_ICON
   const meta = el('div', 'meta-box')
   meta.append(el('div', 'nm', p.path), el('div', 'sz', `${p.mime || 'file'} · ${p.size || 0} B`))
   const href =
-    `/api/artifacts/${encodeURIComponent(state.runId)}/` +
+    `/api/artifacts/${encodeURIComponent(runId)}/` +
     p.path.split('/').map(encodeURIComponent).join('/') +
     `?token=${encodeURIComponent(token)}`
   const acts = el('div', 'acts')
@@ -271,6 +271,24 @@ async function send(text) {
 
 // 刷新/重开页面后，把仍在等待的审批卡还原出来（并重新订阅事件）
 // 面板里的授权必须是真实数据（原来只在"撤销后"更新，永远显示"尚未授权"）
+// 刷新后产物不能凭空消失：从会话级列表还原到面板
+async function loadArtifacts() {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/artifacts`)
+  const box = $('#artifacts')
+  if (status !== 200) return
+  const list = body.artifacts || []
+  box.textContent = ''
+  if (!list.length) {
+    box.append(el('p', 'muted', '还没有产物'))
+  } else {
+    for (const a of list) box.append(artifactNode({ path: a.path, mime: a.mime, size: a.size }, a.runId))
+  }
+  state.artifacts = list.length
+  $('#topBadge').textContent = String(state.artifacts)
+  $('#railBadge').textContent = String(state.artifacts)
+  $('#panelMeta').textContent = `${state.artifacts} 个产物`
+}
+
 async function loadGrants() {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants`)
   const box = $('#grants')
@@ -353,6 +371,9 @@ async function boot() {
   $('#sbTime').textContent = new Date().toTimeString().slice(0, 8)
   $('#sbStatus').textContent = '空闲'
 
+  const cur = await api(`/api/sessions/${state.sessionId}`)
+  if (cur.status === 200 && cur.body.session?.title) $('#title').textContent = cur.body.session.title
+
   const { body } = await api('/api/sessions')
   const ul = $('#sessions')
   ul.textContent = ''
@@ -377,6 +398,7 @@ async function boot() {
   await loadHistory()
   await loadPending()
   await loadGrants()
+  await loadArtifacts()
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
 
@@ -396,6 +418,7 @@ $('#revoke').addEventListener('click', async () => {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
   if (status === 200) {
     await loadGrants()
+  await loadArtifacts()
     if (!body.revoked) $('#grants').textContent = '没有可撤销的授权'
   } else {
     $('#grants').textContent = `撤销失败（${status}）`
