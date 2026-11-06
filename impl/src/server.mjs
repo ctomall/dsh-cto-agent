@@ -211,6 +211,14 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         .run(tenantId, 'system', 'approval_auto_approved', JSON.stringify({ tool, sessionId, decision }), new Date().toISOString()),
   })
   console.log(`[cube-agent] model driver: ${driver.name} (${driverSource})`)
+  // —— 保留策略：工具结果缓存会随运行增长，按 RETENTION_DAYS（默认 30）清理 ——
+  const keepDays = Number(process.env.RETENTION_DAYS ?? 30)
+  if (Number.isFinite(keepDays) && keepDays > 0) {
+    const cutoff = new Date(Date.now() - keepDays * 86_400_000).toISOString()
+    const info = db.prepare('delete from run_tool_results where created_at < ?').run(cutoff)
+    if (Number(info.changes ?? 0) > 0) console.log(`[cube-agent] 清理过期工具结果 ${info.changes} 条（>${keepDays}d）`)
+  }
+
   // —— 启动收敛：上个进程遗留的 running / waiting_approval 已无内存态可恢复 ——
   // 不收敛的话：页面会出现"点不动的待审批"（僵尸项），审批接口只会回 no_pending_approval。
   const resumable = new Set(db.prepare('select run_id from run_pending').all().map((r) => r.run_id))

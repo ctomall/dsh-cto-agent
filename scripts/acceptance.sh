@@ -88,6 +88,10 @@ echo "== ③ 访问控制与限流"
 me_cookie=$(code -b "$JAR" "$BASE/api/me")
 [ "$me_cookie" = 200 ] && ok "Cookie 直接调 API" "200（无需 Bearer）" || no "Cookie 直接调 API" "期望 200，实际 $me_cookie"
 
+# 总览 API 必须与页面同租户可用（概览页依赖它）
+ov=$(curl -s -m 20 -b "$JAR" "$BASE/api/overview")
+echo "$ov" | grep -q '"tenantId"' && ok "总览 API" "200 且含 tenantId" || no "总览 API" "响应异常：$(echo "$ov" | head -c 60)"
+
 # 跨站变更请求必须被挡（Cookie 身份下的 CSRF 防护）
 csrf=$(code -b "$JAR" -H 'content-type: application/json' -H 'sec-fetch-site: cross-site' -d '{}' -X POST "$BASE/api/sessions")
 [ "$csrf" = 403 ] && ok "跨站写请求被拒" "403" || no "跨站写请求被拒" "期望 403，实际 $csrf"
