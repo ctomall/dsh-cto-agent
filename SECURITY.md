@@ -1,0 +1,38 @@
+# 安全契约
+
+> 一句话：**凡是把数据发出去的端点，都必须过租户闸门**——包括 SSE、下载、错误信息。
+
+## 信任边界
+
+| 层 | 谁在守 | 说明 |
+|---|---|---|
+| 边缘 | Cloudflare（**未配置**） | 当前未启用 CF Access，边缘访问控制待补（见 HANDOFF ③） |
+| 应用身份 | `APP_PASSWORD` → HMAC Cookie | 单口令部署时，Cookie 通过即映射 `GATE_TENANT`/`GATE_USER` |
+| 租户身份 | `Bearer` token → `{tenantId,userId}` | 多租户正路；Cookie 与 Bearer 二选一 |
+| 资源归属 | `runs.tenant_id` / `sessions.tenant_id` | 跨租户**一律 404**（不区分越权与不存在，避免探测） |
+
+## 端点规则（新增端点必须对照）
+
+1. **GET 资源**：先解析身份 → 再按 `tenant_id + 资源 id` 查 → 查不到返回 404
+2. **POST 变更**：同上，且 Cookie 身份下必须过 CSRF 同源校验（`sec-fetch-site` 非 `same-origin` → 403）
+3. **SSE / 流式**：与普通 GET 同样校验（`/api/runs/:id/events` 曾因此漏过，v64 修复）
+4. **文件下载**：校验 run 归属 + `path.resolve` 后必须仍在工作区目录内（防路径穿越）
+5. **全局运维端点**（`/metrics`、`/api/admin/upgrade`）：只认 Cookie 或专用 token，不认租户 token
+
+## 已有闸门与证据
+
+| 项 | 位置 | 证据 |
+|---|---|---|
+| 租户矩阵（8 个 GET + 2 个 POST 跨租户 404） | `impl/test/tenant-matrix.test.mjs` | `node --test` |
+| 事件流隔离 | `impl/src/server.mjs` SSE 段 | 同左 |
+| 路径穿越 400 | `impl/test/artifacts.test.mjs` | 同左 |
+| CSRF 403 | `impl/test/gate-cookie.test.mjs` | 同左 |
+| Cookie 三件套（HttpOnly/SameSite/Secure） | `impl/src/gate.mjs` | 同左 |
+| 升级接口鉴权四口径 | `impl/test/upgrade-auth.test.mjs` | 同左 |
+| 密钥不入库 | `scripts/secret-scan.sh` | 运行 exit 0 |
+
+## 已知缺口
+
+- **未启用 Cloudflare Access**：公网入口只有应用层口令门
+- **Cookie 身份映射到固定租户**（`GATE_TENANT`，默认 `t_a`）：单口令部署的固有简化，多租户必须走 Bearer
+- **无审计查询接口**：`audit_log` 只写不读（只能查库）
