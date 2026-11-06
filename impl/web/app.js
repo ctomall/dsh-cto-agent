@@ -302,6 +302,11 @@ function handleEvent(type, p) {
     // 只显示一个"失败"等于把排查工作全丢给用户
     const reason = String(p?.error ?? '未知原因')
     setStatus(`失败：${reason.slice(0, 60)}`, 'done')
+    // SSE 断线重连会重放事件：失败卡片必须按 runId 去重，否则重连一次就多一张
+    state.failedRuns ??= new Set()
+    const failKey = String(state.runId ?? '')
+    if (state.failedRuns.has(failKey)) { state.es?.close(); return }
+    state.failedRuns.add(failKey)
     const box = el('div', 'card error')
     const head = el('div', 'card-head')
     head.append(el('span', 'title', '运行失败'))
