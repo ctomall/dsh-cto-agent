@@ -292,12 +292,15 @@ function handleEvent(type, p) {
   } else if (type === 'artifact.created') {
     artifactCard(p)
   } else if (type === 'run.finished') {
+    state.inflight = false
     setStatus('完成', 'done')
     state.es?.close()
   } else if (type === 'run.canceled') {
+    state.inflight = false
     setStatus('已取消', 'done')
     state.es?.close()
   } else if (type === 'run.failed') {
+    state.inflight = false
     // 失败必须说清原因：真实模型的失败方式很多（超时/超步数/输出不合法/上下文超限），
     // 只显示一个"失败"等于把排查工作全丢给用户
     const reason = String(p?.error ?? '未知原因')
@@ -343,6 +346,9 @@ function subscribe(runId, { lastEventId = 0 } = {}) {
 
 async function send(text) {
   if (!text.trim()) return
+  // 防重复提交：连按两次回车会创建两个 run（真模型下就是两笔计费），
+  // 而界面上只订阅得到后一个，前一个会无人看管地跑完
+  if (state.inflight) { setStatus('上一条还在运行，等它结束再发送', 'waiting'); return }
   // 会话可能还没加载出来（boot 慢、或刚打开页面就提交）：
   // 此时不能带着 undefined 去创建 run，否则用户只会看到"提交失败"
   if (!state.sessionId) {
@@ -355,10 +361,11 @@ async function send(text) {
   state.assistant = null
   state.decided = false
   $('#input').value = ''
+  state.inflight = true
   setStatus('已提交', 'running')
   const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
-  if (status === 429) { setStatus(rateLimitedText(body, '发送'), 'error'); return }
-  if (status !== 202) { setStatus('提交失败', 'done'); return }
+  if (status === 429) { state.inflight = false; setStatus(rateLimitedText(body, '发送'), 'error'); return }
+  if (status !== 202) { state.inflight = false; setStatus('提交失败', 'done'); return }
   state.runId = body.runId
   subscribe(body.runId)
 }
@@ -491,6 +498,7 @@ async function loadHistory() {
 }
 
 async function cancelRun() {
+  state.inflight = false
   if (state.runId) await api(`/api/runs/${state.runId}/cancel`, { method: 'POST', body: '{}' })
   state.es?.close()
   setStatus('已停止', 'done')
