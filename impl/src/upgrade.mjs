@@ -18,6 +18,22 @@ export class UpgradeError extends Error {
   }
 }
 
+// 测试必须在「干净环境」里跑：服务进程带着 CUBE_TOKENS/APP_PASSWORD/DB_PATH 等，
+// 直接继承会让测试连到生产配置（gate 测试期望未开口令门、租户测试期望 dev token），从而必然失败。
+const TEST_ENV_STRIP = [
+  'CUBE_TOKENS', 'CUBE_UPGRADE_TOKEN', 'APP_PASSWORD', 'APP_SESSION_SECRET',
+  'DB_PATH', 'WORKSPACE_ROOT', 'PORT',
+  'UPGRADE_RUN_TESTS', 'UPGRADE_EXIT_AFTER', 'UPGRADE_REMOTE', 'UPGRADE_BRANCH',
+  'MODEL_BASE_URL', 'MODEL_NAME', 'MODEL_API_KEY', 'MODEL_API_KEY_FILE',
+]
+
+export function cleanTestEnv(env = process.env) {
+  const out = { ...env }
+  for (const k of TEST_ENV_STRIP) delete out[k]
+  out.NODE_ENV = 'test'
+  return out
+}
+
 const TEST_FILES = [
   'impl/test/tenant-isolation.test.mjs',
   'impl/test/sse-resume.test.mjs',
@@ -42,7 +58,7 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
     runCommand ??
     ((args) =>
       new Promise((resolve, reject) => {
-        execFile('node', args, { cwd: repoDir, timeout: 180_000 }, (err, stdout, stderr) => {
+        execFile('node', args, { cwd: repoDir, timeout: 180_000, env: cleanTestEnv() }, (err, stdout, stderr) => {
           if (err) reject(new Error(`${(stderr || err.message).trim()}`.slice(0, 400)))
           else resolve(String(stdout).trim())
         })
