@@ -533,6 +533,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
           testGate: process.env.UPGRADE_RUN_TESTS === '1',
           exitAfter: process.env.UPGRADE_EXIT_AFTER === '1',
           testScope: String(process.env.UPGRADE_TEST_SCOPE ?? '').trim().toLowerCase() === 'full' ? 'full' : 'smoke(5)',
+          testTimeoutMs: (() => { const v = Number(process.env.UPGRADE_TEST_TIMEOUT_MS); return Number.isFinite(v) && v >= 10_000 ? Math.trunc(v) : 180_000 })(),
         },
         lastProbe,
         agent: {

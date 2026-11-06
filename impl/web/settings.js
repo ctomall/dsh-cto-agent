@@ -38,6 +38,7 @@ async function main() {
     row('请求体上限', body.maxBodyBytes ? `${(body.maxBodyBytes / 1024).toFixed(0)} KB` : '-'),
     row('升级测试门禁', body.upgrade?.testGate ? '开启（失败自动回滚）' : '关闭'),
     row('升级后自重启', body.upgrade?.exitAfter ? '开启' : '关闭'),
+    row('门禁超时', body.upgrade?.testTimeoutMs ? `${Math.round(body.upgrade.testTimeoutMs / 1000)} 秒` : '-'),
     row('升级测试门禁范围', body.upgrade?.testScope === 'full' ? '全量' : '冒烟 5 个文件（UPGRADE_TEST_SCOPE=full 可改全量）'),
     row('单 run 步数上限', body.agent?.maxSteps ? `${body.agent.maxSteps} 步` : '-'),
     row('单 run 超时', body.agent?.timeoutMs ? `${(body.agent.timeoutMs / 1000).toFixed(0)} 秒` : '-'),
