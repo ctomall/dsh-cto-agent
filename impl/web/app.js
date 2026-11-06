@@ -319,19 +319,23 @@ function handleEvent(type, p) {
 }
 
 function subscribe(runId, { lastEventId = 0 } = {}) {
-  // 同一时刻只保留一条实时连接（避免连接泄漏与重复处理）。
-  // 注：v176 实测证明"重复卡片"不是连接泄漏导致的（关掉旧连接后仍会处理两次），
-  // 真正兜底的是 run.failed 的 runId 去重；这里的关闭仍保留，属于正确的资源纪律。
+  // 同一个 run 只能有一条连接：loadActive（续接，带 lastSeq）与 send（刚提交，从 0 开始）
+  // 会同时想订阅同一个 run，第二条会把整段事件重放一遍 —— v176 的"处理两次"就是这个。
+  if (state.esRunId === runId && state.es) return
   try { state.es?.close() } catch {}
   const q = new URLSearchParams({ token })
   if (lastEventId) q.set('lastEventId', String(lastEventId))
   const es = new EventSource(`/api/runs/${runId}/events?${q.toString()}`)
   state.es = es
+  state.esRunId = runId
   for (const t of [
     'run.started', 'text.delta', 'tool.started', 'approval.requested', 'approval.auto_approved',
     'approval.decided', 'tool.finished', 'artifact.created', 'run.finished', 'run.canceled', 'run.failed',
   ]) {
     es.addEventListener(t, (e) => {
+      // 记住已收到的事件序号：后续任何"重订阅"都从这里续，而不是从 0 重放
+      const seq = Number(e.lastEventId)
+      if (Number.isFinite(seq) && seq > 0) state.lastSeq = seq
       try { handleEvent(t, JSON.parse(e.data)) } catch {}
     })
   }

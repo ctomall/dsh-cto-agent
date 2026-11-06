@@ -83,6 +83,8 @@ for (let i = 0; i < 30; i++) {
     status: document.querySelector('#runlabel')?.textContent ?? null,
     errorCard: document.querySelectorAll('.card.error').length,
     errorText: document.querySelector('.card.error .body p')?.textContent ?? null,
+    subCalls: window.__subCalls ?? 0,
+    subArgs: window.__subArgs ?? [],
   })`)
   if (info.errorCard > 0) break
 }

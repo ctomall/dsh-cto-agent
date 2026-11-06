@@ -66,3 +66,9 @@ test('审批卡必须说明"参数被截断"（不能让人以为模型只写了
   assert.match(js, /argsTruncated/, 'app.js 未处理 argsTruncated')
   assert.match(js, /已截断显示/, '缺少截断提示文案')
 })
+
+test('同一 run 只能有一条 SSE 连接（loadActive 与 send 会争着订阅）', () => {
+  const js = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.match(js, /state\.esRunId === runId/, '缺少"同 run 单连接"守卫')
+  assert.match(js, /state\.lastSeq = seq/, '未记录已收到的事件序号（重订阅会从 0 重放）')
+})
