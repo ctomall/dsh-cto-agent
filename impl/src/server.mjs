@@ -568,6 +568,7 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
           historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
           historyChars: numEnv('AGENT_HISTORY_CHARS', 8_000),
           maxOutput: numEnv('AGENT_MAX_OUTPUT_TOKENS', 0) || null,
+          sseHeartbeatMs: numEnv('SSE_HEARTBEAT_MS', 15_000),
         },
         startedAt,
         // 明确不返回：令牌、口令、模型密钥、DB 绝对路径
@@ -710,7 +711,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (url.searchParams.get('replay') === '1') {
         return handleEventsRequest({ res, log, runId, lastEventId })
       }
-      return handleLiveEvents({ req, res, log, rc, runId, lastEventId })
+      // 心跳间隔可配：慢模型下要保活，测试与门禁里要快
+      return handleLiveEvents({ req, res, log, rc, runId, lastEventId, heartbeatMs: numEnv('SSE_HEARTBEAT_MS', 15_000) })
     }
 
     // —— 创建 run（跑到审批处停下）——
