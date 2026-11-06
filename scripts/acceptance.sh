@@ -12,8 +12,13 @@ for a in "$@"; do
 done
 
 PW_FILE=".runtime-app-password"; TOK_FILE=".runtime-tokens"
-PW=$(cut -d= -f2- "$PW_FILE" 2>/dev/null)
-T_A=$(cut -d= -f2- "$TOK_FILE" 2>/dev/null | head -1)
+# 口令来源优先级：环境变量 PW > .runtime-app-password > 空
+# （干净克隆里没有 .runtime-app-password，靠环境变量即可完整复现）
+PW="${PW:-$(cut -d= -f2- "$PW_FILE" 2>/dev/null)}"
+# token 来源：环境变量 TOK_A/TOK_B > .runtime-tokens（干净克隆里用环境变量即可复现）
+T_A="${TOK_A:-$(cut -d= -f2- "$TOK_FILE" 2>/dev/null | head -1)}"
+T_B="${TOK_B:-$(cut -d= -f2- "$TOK_FILE" 2>/dev/null | sed -n '2p')}"
+T_B="${T_B:-tok_b}"
 JAR=$(mktemp); trap 'rm -f "$JAR"' EXIT
 
 pass=0 fail=0 skip=0

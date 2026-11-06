@@ -185,3 +185,20 @@ sudo journalctl -u cube-agent-restore-drill.service -n 20 # 期望最后一行 p
 - 结论：**丢包发生在出网链路/边缘路径，不是应用缺陷**；所有公网验收脚本都需对 `000`/`502` 重试
 - 因此：**判定以本机验收为准**；公网结论只在多次重试成功时才算数
 - **吞吐上限**：`/api/runs` 受 runs 桶限流（**20/分/IP**）。并发冒烟时超过该值会拿到 429，`scripts/concurrency-smoke.sh` 会自动等待 62s 重试一次；这不是故障，是设计
+
+## 干净克隆复现（无需 .runtime-* 文件）
+
+验收脚本的凭据来源已支持环境变量，任何人在空白机器上都能复现：
+
+```bash
+git clone git@github.com:ctomall/dsh-cto-agent.git && cd dsh-cto-agent
+node --test impl/test/*.test.mjs            # 221 通过
+APP_PASSWORD='pw-1' APP_SESSION_SECRET='secret-1234567890' \
+CUBE_TOKENS='{"tok_a":{"tenantId":"t_a","userId":"u_a"},"tok_b":{"tenantId":"t_b","userId":"u_b"}}' \
+PORT=8899 DB_PATH=/tmp/vc/cube.db WORKSPACE_ROOT=/tmp/vc/ws node impl/src/server.mjs &
+
+PW='pw-1' TOK_A=tok_a TOK_B=tok_b ./scripts/acceptance.sh http://127.0.0.1:8899
+# → pass=20 fail=0 skip=2（两个 SKIP 是 ① 真实模型 / ③ 边缘 Access）
+```
+
+**实测**：空库干净克隆上 pass=20 fail=0 skip=2（2026-11-06）。
