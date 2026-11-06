@@ -23,9 +23,11 @@ const ROUTES = [
   ['POST', '/api/admin/upgrade'],
 ]
 
-async function call(base, method, path) {
+// 机器负载高时（门禁与其它任务并发）单次请求可能超时，那属于环境抖动而不是安全属性。
+// 口径：**超时重试一次**；持续超时才判 HANG——既不放过"真挂住"，也不让负载变成假红灯。
+async function callOnce(base, method, path) {
   const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), 3000) // 任何一条路由都不许挂住测试
+  const timer = setTimeout(() => ctl.abort(), 5000) // 任何一条路由都不许挂住测试
   try {
     const res = await fetch(base + path, {
       method,
@@ -40,6 +42,13 @@ async function call(base, method, path) {
   } finally {
     clearTimeout(timer)
   }
+}
+
+async function call(base, method, path) {
+  const first = await callOnce(base, method, path)
+  if (!String(first).startsWith('HANG')) return first
+  await new Promise((r) => setTimeout(r, 200))
+  return callOnce(base, method, path)
 }
 
 async function boot(t, env) {

@@ -20,13 +20,14 @@ function sseServer(port, chunks) {
 }
 
 test('流式分片重组：参数被切成很多块（含键名中间断开）也能拼出完整 JSON', async (t) => {
-  const port = 8793
-  const srv = await sseServer(port, [
+  // 端口用 0（临时端口）：固定端口在并发/其它演练占用时会 EADDRINUSE，制造假红灯
+  const srv = await sseServer(0, [
     { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_a', function: { name: 'fs.write', arguments: '{"pa' } }] } }] },
     { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'th":"a' } }] } }] },
     { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '.md","content":"hi"}' } }] } }] },
   ])
   t.after(() => srv.close())
+  const { port } = srv.address()
   const driver = createOpenAiDriver({ baseUrl: `http://127.0.0.1:${port}`, apiKey: 'k', model: 'm' })
   const out = await driver.complete({ messages: [{ role: 'user', content: 'x' }], tools: [], onDelta: () => {} })
   assert.equal(out.type, 'tool_call')
@@ -35,15 +36,14 @@ test('流式分片重组：参数被切成很多块（含键名中间断开）�
 })
 
 test('并行 tool_call：第一个执行，其余显式回报 unsupported（不静默丢弃）', async (t) => {
-  const port = 8794
-  const srv = await sseServer(port, [
+  const srv = await sseServer(0, [
     { choices: [{ delta: { tool_calls: [
       { index: 0, id: 'call_1', function: { name: 'fs.write', arguments: '{"path":"a.md","content":"x"}' } },
       { index: 1, id: 'call_2', function: { name: 'fs.write', arguments: '{"path":"b.md","content":"y"}' } },
     ] } }] },
   ])
   t.after(() => srv.close())
-
+  const { port } = srv.address()
   const driver = createOpenAiDriver({ baseUrl: `http://127.0.0.1:${port}`, apiKey: 'k', model: 'm' })
   const events = []
   let status = 'running'

@@ -17,7 +17,7 @@ test('慢 provider 下审批请求立即返回，恢复在后台继续', async (
         } else {
           res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: '写完' }, finish_reason: 'stop' }] }))
         }
-      }, 2500) // 每一步都慢 2.5s
+      }, 3000) // 每一步都慢 3s
     })
   })
   await new Promise((r) => slow.listen(0, r))
@@ -47,7 +47,9 @@ test('慢 provider 下审批请求立即返回，恢复在后台继续', async (
   const ap = await fetch(`${base}/api/approvals/${runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'allow_once' }) })
   const ms = Date.now() - t0
   assert.equal(ap.status, 200)
-  assert.ok(ms < 1000, `审批不该等模型继续跑，实际 ${ms}ms`)
+  // 语义判据：请求必须在"模型第二步能返回"之前结束。
+  // 不用固定的 <1000ms —— 机器负载高时那是假红灯（本机 4 路并发实测过）。
+  assert.ok(ms < 3000, `审批不该等模型继续跑，实际 ${ms}ms（provider 需 3000ms 才回）`)
   assert.equal((await ap.json()).status, 'accepted')
 
   // 后台继续：最终应完成并落产物
