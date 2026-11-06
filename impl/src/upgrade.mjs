@@ -2,6 +2,7 @@
 // 安全口径：未配置 token 时接口整体关闭（fail-closed），不是"忘配就裸奔"。
 import { execFile } from 'node:child_process'
 import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
 // 常量时间比较：避免通过响应时间侧信道推断 token
@@ -47,10 +48,11 @@ const TEST_FILES = [
 
 // 注意：`node --test impl/test` 在 Node 24 会把目录当成模块去 require 并报错，
 // 所以"全量"必须在运行时枚举文件，不能传目录。
-export function testFilesForScope(env = process.env, listDir = (dir) => readdirSync(dir)) {
+export function testFilesForScope(env = process.env, listDir = (dir) => readdirSync(dir), baseDir = process.cwd()) {
   if (String(env.UPGRADE_TEST_SCOPE ?? '').trim().toLowerCase() !== 'full') return TEST_FILES
   try {
-    return listDir('impl/test')
+    // 必须相对「仓库根」枚举：服务的 cwd 是 <repo>/impl，直接用 process.cwd() 会 ENOENT 并静默回退到冒烟集
+    return listDir(join(baseDir, 'impl/test'))
       .filter((f) => f.endsWith('.test.mjs'))
       .sort()
       .map((f) => `impl/test/${f}`)
@@ -119,7 +121,7 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
       let tests = 'skipped'
       if (runTests) {
         try {
-          await cmd(['--test', ...testFilesForScope()])
+          await cmd(['--test', ...testFilesForScope(process.env, undefined, repoDir)])
           tests = 'passed'
         } catch (e) {
           // 拉下来的代码没通过测试：必须回滚，不能把坏版本留在磁盘上
