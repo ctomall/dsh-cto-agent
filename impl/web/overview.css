@@ -97,6 +97,7 @@ h1, h2 { margin: 0; }
 [data-rail="collapsed"] .rail-head { justify-content: center; padding: 0; }
 [data-rail="collapsed"] .nav-item { justify-content: center; padding: 0; }
 [data-rail="collapsed"] #toggleRail { transform: rotate(180deg); }
+[data-rail="collapsed"] .nav-item .badge { display: none; }
 
 /* ——— 中栏：header + 可滚动内容（单列，max 980）——— */
 .main { display: flex; flex-direction: column; min-width: 0; background: var(--n55); }
@@ -232,6 +233,8 @@ h1, h2 { margin: 0; }
 /* 窄屏：侧栏收起、面板改浮层（DSH 在 <1024 自动收起侧栏） */
 @media (max-width: 1023px) {
   .frame { --rail-w: 56px; }
+  .nav-item .badge { display: none; } /* 56px 轨道放不下徽标，隐藏免得压住图标 */
+  .sessions { overflow: hidden; } /* 轨道里不显示会话文字，别留一条隐形滚动条 */
   .brand, .lbl { display: none; }
   .rail-head { justify-content: center; padding: 0; }
   .nav-item { justify-content: center; padding: 0; }
