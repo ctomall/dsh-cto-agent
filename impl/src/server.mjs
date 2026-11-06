@@ -159,6 +159,16 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         .run(tenantId, 'system', 'approval_auto_approved', JSON.stringify({ tool, sessionId, decision }), new Date().toISOString()),
   })
   console.log(`[cube-agent] model driver: ${driver.name} (${driverSource})`)
+  // —— 启动收敛：上个进程遗留的 running / waiting_approval 已无内存态可恢复 ——
+  // 不收敛的话：页面会出现"点不动的待审批"（僵尸项），审批接口只会回 no_pending_approval。
+  for (const o of db.prepare("select id, tenant_id from runs where status in ('running', 'waiting_approval')").all()) {
+    const ts = new Date().toISOString()
+    db.prepare('update runs set status = ?, ended_at = ? where id = ?').run('failed', ts, o.id)
+    log.append(o.id, 'run.failed', { runId: o.id, error: 'interrupted_by_restart' })
+    db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
+      .run(o.tenant_id ?? 't_a', 'system', 'run_interrupted', JSON.stringify({ runId: o.id }), ts)
+  }
+
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local')
 

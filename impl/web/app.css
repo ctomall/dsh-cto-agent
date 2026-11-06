@@ -74,7 +74,7 @@ h1, h2 { margin: 0; }
 .rail-foot { padding: 8px; border-top: 1px solid var(--line-1); flex: none; }
 
 .nav-item {
-  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px;
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px;
   border: 0; border-radius: var(--r-sm); background: transparent;
   color: var(--n700); font: 400 13px/1 inherit; text-align: left; text-decoration: none;
   cursor: pointer; white-space: nowrap; width: 100%;
@@ -85,7 +85,7 @@ h1, h2 { margin: 0; }
 .nav-item .ico { width: 20px; height: 16px; flex: none; color: var(--n500); }
 .nav-item:hover .ico, .nav-item.active .ico { color: var(--n1000); }
 .nav-item .badge {
-  margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px;
+  margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px;
   display: grid; place-items: center; border-radius: 999px;
   background: var(--n75); color: var(--n600);
   font: 500 11px/1 "JetBrains Mono", ui-monospace, monospace;
@@ -144,7 +144,7 @@ h1, h2 { margin: 0; }
 .msg.user { justify-content: flex-end; }
 .msg.user .bubble {
   max-width: 72%; background: var(--n75); border: 1px solid var(--line-1);
-  border-radius: var(--r-lg); padding: 8px 14px; white-space: pre-wrap;
+  border-radius: var(--r-lg); padding: 8px 12px; white-space: pre-wrap;
 }
 .msg.assistant .text { max-width: 100%; white-space: pre-wrap; color: var(--n1000); }
 
@@ -154,7 +154,7 @@ h1, h2 { margin: 0; }
   margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow-1);
 }
 .card-head {
-  display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 14px;
+  display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 16px;
   font-size: 13px; cursor: pointer; user-select: none;
 }
 .card-head .name { font-weight: 500; }
@@ -172,10 +172,10 @@ h1, h2 { margin: 0; }
 .status-error { color: var(--red600); }
 .status-running { color: var(--blue600); }
 
-.approval { border-left: 3px solid var(--amber500); }
+.approval { border-left: 2px solid var(--amber500); }
 .approval .card-head { cursor: default; }
 .approval .title { font-weight: 600; }
-.approval .body { padding: 0 16px 14px; }
+.approval .body { padding: 0 16px 16px; }
 .approval dl { margin: 0; display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 6px 12px; font-size: 13px; }
 .approval dt { color: var(--n500); }
 .approval dd { margin: 0; color: var(--n700); word-break: break-word; }
@@ -204,7 +204,7 @@ h1, h2 { margin: 0; }
 .note .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green500); }
 
 .artifact {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 8px;
   background: var(--n00); border: 1px solid var(--line-2); border-radius: var(--r-md);
   padding: 10px 12px; margin-bottom: 10px;
 }
@@ -220,7 +220,7 @@ h1, h2 { margin: 0; }
 
 /* ——— 输入区 ——— */
 .composer { flex: none; border-top: 1px solid var(--line-2); background: var(--n00); padding: 12px 24px 10px; }
-.composer-inner { display: flex; gap: 10px; align-items: flex-end; max-width: 860px; margin: 0 auto; }
+.composer-inner { display: flex; gap: 8px; align-items: flex-end; max-width: 860px; margin: 0 auto; }
 .composer textarea {
   flex: 1; resize: none; border: 1px solid var(--line-3); border-radius: var(--r-md);
   padding: 9px 12px; font: 400 14px/22px inherit; color: var(--n1000); background: var(--n00);
@@ -231,7 +231,7 @@ h1, h2 { margin: 0; }
 .composer textarea:focus { outline: none; border-color: var(--blue500); box-shadow: 0 0 0 3px rgba(59,130,246,.14); }
 #send {
   background: var(--blue500); color: #fff; border: 1px solid var(--blue500);
-  border-radius: var(--r-md); padding: 8px 18px;
+  border-radius: var(--r-md); padding: 8px 20px;
   font: 500 13px/20px inherit; cursor: pointer; flex: none;
   transition: background-color var(--dur) var(--ease);
 }

@@ -23,3 +23,24 @@ test('落盘库：关掉再打开，数据仍在；种子幂等不重复', (t) =
   assert.equal(Number(tenants.c), 2, '种子不应重复灌入')
   db.close()
 })
+
+test('启动收敛：上个进程遗留的 waiting_approval 会被标记 failed 并写审计', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+
+  db.prepare('insert into runs (id, status, started_at, tenant_id, session_id) values (?,?,?,?,?)')
+    .run('r_stale', 'waiting_approval', new Date().toISOString(), 't_a', 's_a1')
+  db.prepare('insert into runs (id, status, started_at, tenant_id, session_id) values (?,?,?,?,?)')
+    .run('r_run', 'running', new Date().toISOString(), 't_a', 's_a1')
+
+  const app = createApp(db)
+  t.after(() => app.close())
+
+  assert.equal(db.prepare('select status from runs where id = ?').get('r_stale').status, 'failed')
+  assert.equal(db.prepare('select status from runs where id = ?').get('r_run').status, 'failed')
+  const audited = db.prepare("select count(*) c from audit_log where action = 'run_interrupted'").get().c
+  assert.equal(audited, 2)
+  const failedEvents = db.prepare("select count(*) c from events where type = 'run.failed'").get().c
+  assert.equal(failedEvents, 2, '每个被收敛的 run 都要留下 run.failed 事件')
+})

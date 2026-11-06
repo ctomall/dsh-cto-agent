@@ -4,7 +4,7 @@ export const TERMINAL = new Set(['done', 'failed', 'canceled'])
 const ALLOWED = {
   queued: ['running', 'canceled'],
   running: ['waiting_approval', 'done', 'failed', 'canceled'],
-  waiting_approval: ['running', 'canceled'],
+  waiting_approval: ['running', 'canceled', 'failed'],
   done: [],
   failed: [],
   canceled: [],
