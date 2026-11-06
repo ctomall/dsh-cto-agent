@@ -37,3 +37,29 @@ test('list 只返回本租户本会话的授权', () => {
   assert.equal(rows[0].tool, 'fs.write')
   assert.equal(rows[0].scope, 'session')
 })
+
+test('HTTP：审批"本会话允许"后，/grants 返回真实授权；跨租户 404', async (t) => {
+  const { createApp } = await import('../src/server.mjs')
+  const { openDb, seedTwoTenants } = await import('../src/db.mjs')
+  const db = openDb(); seedTwoTenants(db)
+  const app = createApp(db)
+  t.after(() => app.close())
+  await new Promise((r) => app.listen(0, r))
+  const base = `http://127.0.0.1:${app.address().port}`
+  const H = { 'content-type': 'application/json', authorization: 'Bearer tok_a' }
+
+  const { id: sid } = await (await fetch(`${base}/api/sessions`, { method: 'POST', headers: H, body: JSON.stringify({ title: '授权列表' }) })).json()
+  const { runId } = await (await fetch(`${base}/api/runs`, { method: 'POST', headers: H, body: JSON.stringify({ input: '写一份报告', sessionId: sid }) })).json()
+  await new Promise((r) => setTimeout(r, 200))
+
+  const before = await (await fetch(`${base}/api/sessions/${sid}/grants`, { headers: H })).json()
+  assert.equal(before.grants.length, 0, '授权前应为空')
+
+  await fetch(`${base}/api/approvals/${runId}`, { method: 'POST', headers: H, body: JSON.stringify({ decision: 'allow_session' }) })
+  const after = await (await fetch(`${base}/api/sessions/${sid}/grants`, { headers: H })).json()
+  assert.equal(after.grants.length, 1)
+  assert.equal(after.grants[0].tool, 'fs.write')
+  assert.equal(after.grants[0].scope, 'session')
+
+  assert.equal((await fetch(`${base}/api/sessions/s_b1/grants`, { headers: H })).status, 404)
+})

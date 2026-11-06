@@ -219,6 +219,11 @@ h1, h2 { margin: 0; }
   font-size: 11px; color: var(--n600);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.grant-item {
+  font-size: 12px;
+  color: var(--n700);
+  padding: 4px 0;
+}
 .pend .meta { display: flex; justify-content: space-between; margin-top: 5px; }
 
 /* ——— 底部通栏状态栏 ——— */

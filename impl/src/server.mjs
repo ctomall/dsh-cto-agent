@@ -336,6 +336,17 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { ok: true, driver: driver.name }))
     }
 
+    // —— 会话级授权列表：面板必须显示真实授权，而不是永远"尚未授权" ——
+    const gl = /^\/api\/sessions\/([^/]+)\/grants$/.exec(url.pathname)
+    if (req.method === 'GET' && gl) {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const sessionId = decodeURIComponent(gl[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sessionId, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      return reply(res, json(200, { grants: grants.list({ tenantId: ctx.tenantId, sessionId }) }))
+    }
+
     // —— 会话内待审批：刷新/重开页面后仍能把审批卡还原出来 ——
     const pd = /^\/api\/sessions\/([^/]+)\/pending$/.exec(url.pathname)
     if (req.method === 'GET' && pd) {

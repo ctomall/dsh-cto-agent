@@ -275,6 +275,8 @@ kbd {
   outline-offset: 2px;
 }
 
+.grant-item { font-size: 12px; color: var(--n700); padding: 4px 0; }
+
 @media (max-width: 1023px) {
   .frame { --rail-w: 56px; }
   .nav-item .badge { display: none; } /* 56px 轨道放不下徽标，隐藏免得压住图标 */

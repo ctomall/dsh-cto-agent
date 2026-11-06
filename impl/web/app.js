@@ -223,6 +223,7 @@ function handleEvent(type, p) {
   } else if (type === 'approval.decided') {
     if (p.decision === 'deny') setToolState(p.callId, 'muted', '已拒绝')
     else setToolState(p.callId, 'running', '执行中')
+    if (p.decision === 'allow_session') loadGrants()
   } else if (type === 'tool.finished') {
     setToolState(p.callId, p.ok ? 'ok' : 'error', p.ok ? '完成' : p.error === 'denied_by_policy' ? '已拒绝' : '失败')
     setStatus(p.ok ? '执行完成' : '执行失败', 'running')
@@ -269,12 +270,25 @@ async function send(text) {
 }
 
 // 刷新/重开页面后，把仍在等待的审批卡还原出来（并重新订阅事件）
+// 面板里的授权必须是真实数据（原来只在"撤销后"更新，永远显示"尚未授权"）
+async function loadGrants() {
+  const { status, body } = await api(`/api/sessions/${state.sessionId}/grants`)
+  const box = $('#grants')
+  if (status !== 200) { box.textContent = '读取失败'; return }
+  const list = body.grants || []
+  if (!list.length) { box.textContent = '尚未授权任何工具'; return }
+  box.textContent = ''
+  for (const g of list) box.append(el('div', 'grant-item', `${label(g.tool)} · 本会话`))
+}
+
 async function loadPending() {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/pending`)
   if (status !== 200 || !body.pending?.length) return
   for (const p of body.pending) {
     state.runId = p.runId
     state.decided = false
+    toolCard({ tool: p.tool, callId: p.callId })
+    setToolState(p.callId, 'muted', '等待确认')
     approvalCard({ runId: p.runId, action: p.tool, target: p.target, impact: p.impact, args: p.args, callId: p.callId })
     // 从「当前最后一条事件」开始订阅：既拿到后续进展，又不把已渲染的旧事件再放一遍
     const seq = await lastSeq(p.runId)
@@ -362,6 +376,7 @@ async function boot() {
 
   await loadHistory()
   await loadPending()
+  await loadGrants()
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
 
@@ -379,7 +394,12 @@ for (const chip of document.querySelectorAll('.chip')) {
 $('#stop').addEventListener('click', cancelRun)
 $('#revoke').addEventListener('click', async () => {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/grants/revoke`, { method: 'POST', body: '{}' })
-  $('#grants').textContent = status === 200 ? `已撤销 ${body.revoked} 条授权` : `撤销失败（${status}）`
+  if (status === 200) {
+    await loadGrants()
+    if (!body.revoked) $('#grants').textContent = '没有可撤销的授权'
+  } else {
+    $('#grants').textContent = `撤销失败（${status}）`
+  }
 })
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && frame.dataset.panel === 'open' && e.target.id !== 'input') setPanel(false)
