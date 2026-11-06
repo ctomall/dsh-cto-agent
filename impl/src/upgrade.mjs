@@ -34,6 +34,8 @@ export function cleanTestEnv(env = process.env) {
   return out
 }
 
+// 冒烟子集：升级门禁默认只跑这几条（快）。全量用 UPGRADE_TEST_SCOPE=full。
+// 注意：子集通过 != 全量通过——曾发生过"子集绿、全量红"的提交被放上生产，见 v135 记录。
 const TEST_FILES = [
   'impl/test/tenant-isolation.test.mjs',
   'impl/test/sse-resume.test.mjs',
@@ -41,6 +43,12 @@ const TEST_FILES = [
   'impl/test/ratelimit.test.mjs',
   'impl/test/gate.test.mjs',
 ]
+
+export function testFilesForScope(env = process.env) {
+  return String(env.UPGRADE_TEST_SCOPE ?? '').trim().toLowerCase() === 'full'
+    ? ['impl/test'] // node --test 会递归执行目录下所有测试文件
+    : TEST_FILES
+}
 
 function defaultExec(repoDir) {
   return (args) =>
@@ -102,7 +110,7 @@ export function createUpgrade({ repoDir, remote = 'origin', branch = 'main', run
       let tests = 'skipped'
       if (runTests) {
         try {
-          await cmd(['--test', ...TEST_FILES])
+          await cmd(['--test', ...testFilesForScope()])
           tests = 'passed'
         } catch (e) {
           // 拉下来的代码没通过测试：必须回滚，不能把坏版本留在磁盘上

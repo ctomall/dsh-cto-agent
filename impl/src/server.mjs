@@ -529,7 +529,11 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         limits: LIMITS,
         maxBodyBytes: MAX_BODY,
         retentionDays: Number.isFinite(keepDays) ? keepDays : null,
-        upgrade: { testGate: process.env.UPGRADE_RUN_TESTS === '1', exitAfter: process.env.UPGRADE_EXIT_AFTER === '1' },
+        upgrade: {
+          testGate: process.env.UPGRADE_RUN_TESTS === '1',
+          exitAfter: process.env.UPGRADE_EXIT_AFTER === '1',
+          testScope: String(process.env.UPGRADE_TEST_SCOPE ?? '').trim().toLowerCase() === 'full' ? 'full' : 'smoke(5)',
+        },
         lastProbe,
         agent: {
           maxSteps: numEnv('AGENT_MAX_STEPS', 10),
