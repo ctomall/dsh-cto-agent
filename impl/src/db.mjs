@@ -82,6 +82,9 @@ export function openDb(path = ':memory:') {
     );
     create index if not exists idx_sessions_tenant on sessions (tenant_id);
     create index if not exists idx_audit_tenant on audit_log (tenant_id);
+    -- 会话级接口（pending/active/artifacts）与启动收敛都按这两组条件查 runs，补索引避免全表扫
+    create index if not exists idx_runs_session on runs (tenant_id, session_id);
+    create index if not exists idx_runs_status on runs (status);
   `)
   return db
 }

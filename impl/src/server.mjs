@@ -554,6 +554,14 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(202, { runId, sessionId, driver: driver.name }))
     }
 
+    // —— 会话深链：/c/:sessionId → /?sid=…（文档 §7.1 的欠账，用最小改动补上）——
+    const deep = /^\/c\/([^/]+)$/.exec(url.pathname)
+    if (req.method === 'GET' && deep) {
+      const sid = decodeURIComponent(deep[1])
+      res.writeHead(302, { location: `/?sid=${encodeURIComponent(sid)}`, 'cache-control': 'no-store' })
+      return res.end()
+    }
+
     // —— 会话历史（刷新页面后恢复）——
     const hist = /^\/api\/sessions\/([^/]+)\/messages$/.exec(url.pathname)
     if (req.method === 'GET' && hist) {

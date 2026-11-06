@@ -49,7 +49,7 @@
 |---|---|---|
 | `/` | ✅ | 单页应用（会话流 + 审批卡 + 产物卡） |
 | `/artifacts` | ❌ | **未实现**：产物只在对话流与右栏 |
-| `/c/:sessionId` | ❌ | **未实现**：无按会话深链（现用 `?sid=`） |
+| `/c/:sessionId` | ✅ | 已实现：302 → `/?sid=…`（保留 `?sid=` 作为规范形态） |
 | `/kb` | ❌ | **未实现**：知识库未做 |
 | `/plugins` | ❌ | **未实现**：插件管理未做 |
 | `/settings` | ❌ | **未实现** |
@@ -62,3 +62,15 @@
 - 欠账不是缺陷，但**必须是显式欠账**：本文件存在的意义是让“没做”可被检索，而不是靠记忆。
 - 更新规则：动文档 §六/§2.2/§7.1 时同步更新本文件，否则视为文档漂移。
 - 生成脚本只做机械提取，**计数与说明需人工复核**（本文件首版就出现过计数错误，已修）。
+
+## 索引（性能）
+
+| 索引 | 作用 |
+|---|---|
+| `idx_messages_session (tenant_id, session_id)` | 会话历史 |
+| `idx_sessions_tenant (tenant_id)` | 会话列表 |
+| `idx_audit_tenant (tenant_id)` | 审计查询 |
+| `idx_runs_session (tenant_id, session_id)` | 会话级 pending/active/artifacts |
+| `idx_runs_status (status)` | 启动收敛扫描 |
+
+用例 `impl/test/indexes.test.mjs` 断言 `EXPLAIN QUERY PLAN` 必须是 `SEARCH ... USING INDEX`，防止后续改查询退化成全表扫。
