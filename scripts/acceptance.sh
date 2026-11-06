@@ -159,7 +159,8 @@ SID=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: applic
 r1=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"写一份报告\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
 e1=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r1/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
 echo "$e1" | grep -q 'approval.requested' && ok "首次要求审批" "approval.requested" || no "首次要求审批" "$e1"
-curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 30 -d '{"decision":"allow_session"}' "$BASE/api/approvals/$r1" >/dev/null
+# 这里丢弃响应是安全的：随后 ② 的两条断言（/grants 有行 + 同会话第二次不弹卡）会兜底失败
+curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 30 -d '{"decision":"allow_session"}' "$BASE/api/approvals/$r1" >/dev/null # ok-discard
 # 审批返回后授权应已落库（服务端同步写入）；这里再短暂确认一次，
 # 避免把"测量太早"误报成"会话授权没生效"
 for i in $(seq 1 20); do
