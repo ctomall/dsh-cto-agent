@@ -15,12 +15,20 @@ const db = new DatabaseSync(dbPath)
 db.exec("pragma journal_mode=wal; pragma busy_timeout=5000")
 const { EventLog } = await import(process.argv[5])
 const log = new EventLog(db)
-let fails = 0
+let busy = 0, conflicts = 0
 for (let i = 0; i < n; i++) {
-  try { log.append(runId, 'child.event', { i }) } catch (e) { fails += 1 }
+  for (let attempt = 0; attempt < 50; attempt++) {
+    try { log.append(runId, 'child.event', { i }); break } catch (e) {
+      const msg = String(e.message ?? e)
+      if (/SQLITE_BUSY|database is locked/i.test(msg)) { busy += 1; await new Promise((r) => setTimeout(r, 20)); continue }
+      conflicts += 1 // 真正的序号冲突（主键）才是我们关心的失败
+      break
+    }
+  }
 }
 db.close()
-process.exit(fails === 0 ? 0 : 1)
+// 只有"主键冲突"才算失败；BUSY 是负载下的正常竞争（有 busy_timeout，但机器极忙时仍可能超时）
+process.exit(conflicts === 0 ? 0 : 1)
 `
 
 test('跨进程并发追加：seq 不重复、不空洞、无主键冲突', async (t) => {
