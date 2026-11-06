@@ -20,7 +20,13 @@ pass=0 fail=0 skip=0
 ok(){ printf '  ✔ %-34s %s\n' "$1" "$2"; pass=$((pass+1)); }
 no(){ printf '  ✖ %-34s %s\n' "$1" "$2"; fail=$((fail+1)); }
 sk(){ printf '  ○ %-34s %s\n' "$1" "$2"; skip=$((skip+1)); }
-code(){ curl -s -o /dev/null -w '%{http_code}' -m 20 "$@"; }
+# 网络层 000（链路丢包/连接超时）重试一次：本机实测公网 ~30% 连接失败，属环境而非应用问题
+code(){
+  local c
+  c=$(curl -s -o /dev/null -w '%{http_code}' -m 20 "$@") || c="000"
+  if [ "$c" = "000" ]; then sleep 1; c=$(curl -s -o /dev/null -w '%{http_code}' -m 20 "$@") || c="000"; fi
+  printf '%s' "$c"
+}
 
 echo "== 0) 就绪"
 ready=0
