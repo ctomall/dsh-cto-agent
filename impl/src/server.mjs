@@ -268,6 +268,20 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
 
   // —— 启动收敛：上个进程遗留的 running / waiting_approval 已无内存态可恢复 ——
   // 不收敛的话：页面会出现"点不动的待审批"（僵尸项），审批接口只会回 no_pending_approval。
+  // 审批快照也有过期问题：没人理的待审批会永久占着会话，界面上是一张点不动的僵尸卡。
+  // 超过 APPROVAL_TTL_HOURS（默认 24h）就判过期取消，并删掉快照，避免"看起来还能批"。
+  const approvalTtlH = (() => { const v = Number(process.env.APPROVAL_TTL_HOURS); return Number.isFinite(v) && v > 0 ? v : 24 })()
+  const cutoff = new Date(Date.now() - approvalTtlH * 3600_000).toISOString()
+  for (const p of db.prepare('select run_id from run_pending where created_at < ?').all(cutoff)) {
+    const ts = new Date().toISOString()
+    const row = db.prepare('select tenant_id from runs where id = ?').get(p.run_id)
+    db.prepare('delete from run_pending where run_id = ?').run(p.run_id)
+    db.prepare('update runs set status = ?, ended_at = ? where id = ? and status = ?').run('canceled', ts, p.run_id, 'waiting_approval')
+    log.append(p.run_id, 'run.canceled', { runId: p.run_id, reason: 'approval_expired' })
+    db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?, ?, ?, ?, ?)')
+      .run(row?.tenant_id ?? 't_a', 'system', 'approval_expired', JSON.stringify({ runId: p.run_id, ttlHours: approvalTtlH }), ts)
+  }
+
   const resumable = new Set(db.prepare('select run_id from run_pending').all().map((r) => r.run_id))
   for (const o of db.prepare("select id, tenant_id from runs where status in ('running', 'waiting_approval')").all()) {
     if (resumable.has(o.id)) continue // 有落库的审批快照 → 重启后仍可继续
