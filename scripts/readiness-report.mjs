@@ -44,6 +44,18 @@ const drills = readdirSync('scripts').filter((f) => /^check-.*\.(mjs|sh)$/.test(
 add('浏览器级/自检演练', drills.length > 0 ? `已就绪（${drills.length} 个：${drills.slice(0, 4).join(', ')}…）` : '缺失', '多数需 CDP :9222')
 add('provider 一致性脚本', existsSync('scripts/provider-conformance.mjs') ? '已就绪' : '缺失', '接真 key 当天先跑它')
 
+// 2) 重启韧性：单元必须 enabled，否则机器重启后整个服务不会自己回来
+const units = ['cube-agent.service', 'cloudflared-cto.service', 'cube-agent-backup.timer', 'cube-agent-maintenance.timer', 'cube-agent-restore-drill.timer']
+const st = units.map((u) => {
+  const en = run('systemctl', ['is-enabled', u], { timeout: 5000 })
+  const ac = run('systemctl', ['is-active', u], { timeout: 5000 })
+  return { u, en: en.out, ac: ac.out }
+})
+const notEnabled = st.filter((x) => x.en !== 'enabled')
+add('重启韧性（systemd）',
+  notEnabled.length === 0 ? `5 个单元均 enabled（${st.map((x) => x.ac).join('/')}）` : `**未启用**：${notEnabled.map((x) => x.u).join(', ')}`,
+  notEnabled.length === 0 ? '' : '机器重启后不会自动恢复')
+
 const width = Math.max(...rows.map((r) => r.k.length))
 console.log('cube-agent 就绪快照（现场执行，非手写）')
 console.log('='.repeat(46))
