@@ -24,7 +24,7 @@ export function createFakeDriver() {
 }
 
 // OpenAI 兼容端点（DeepSeek / OpenAI / 兼容网关均可）
-export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000, stream = true }) {
+export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000, stream = true, maxOutputTokens = null }) {
   return {
     name: `openai:${model}`,
     async complete({ messages, tools, onDelta, signal }) {
@@ -37,6 +37,8 @@ export function createOpenAiDriver({ baseUrl, apiKey, model, timeoutMs = 60_000,
         ),
         tools: tools.map((t) => ({ type: 'function', function: t })),
         tool_choice: 'auto',
+        // 不设上限时厂商默认值不可控（可能是几千，也可能很小）：显式上限让成本可预算
+        ...(Number(maxOutputTokens) > 0 ? { max_tokens: Number(maxOutputTokens) } : {}),
         ...(stream && onDelta ? { stream: true } : {}),
       }
       const ctrl = new AbortController()
@@ -153,7 +155,11 @@ export function createDriverFromEnv(env = process.env) {
   const model = env.MODEL_NAME
   const apiKey = env.MODEL_API_KEY ?? loadKeyFromFile(env.MODEL_API_KEY_FILE)
   if (baseUrl && model && apiKey) {
-    return { driver: createOpenAiDriver({ baseUrl, apiKey, model }), source: env.MODEL_API_KEY ? 'env' : 'key-file' }
+    const cap = Number(env.AGENT_MAX_OUTPUT_TOKENS)
+    return {
+      driver: createOpenAiDriver({ baseUrl, apiKey, model, maxOutputTokens: Number.isFinite(cap) && cap > 0 ? Math.trunc(cap) : null }),
+      source: env.MODEL_API_KEY ? 'env' : 'key-file',
+    }
   }
   const missing = [!baseUrl && 'MODEL_BASE_URL', !model && 'MODEL_NAME', !apiKey && (env.MODEL_API_KEY_FILE ? 'MODEL_API_KEY_FILE(读不到内容)' : 'MODEL_API_KEY')].filter(Boolean)
   return { driver: createFakeDriver(), source: missing.length ? `fake(missing: ${missing.join(',')})` : 'fake(default)' }

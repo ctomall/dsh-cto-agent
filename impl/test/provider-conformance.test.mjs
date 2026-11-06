@@ -103,3 +103,20 @@ test('finish_reason=length：run 标 truncated 并追加提示，不静默当成
   const note = events.filter((e) => e.ty === 'text.delta').map((e) => e.p.text).join('')
   assert.match(note, /被截断/, '要给用户可见提示')
 })
+
+test('配置了 AGENT_MAX_OUTPUT_TOKENS 时请求体带 max_tokens（成本可预算）', async (t) => {
+  let seen = null
+  const { url } = await sseOnce(t, (res, body) => {
+    seen = JSON.parse(body)
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }))
+  })
+  const driver = createOpenAiDriver({ baseUrl: url, apiKey: 'k', model: 'm', maxOutputTokens: 256 })
+  await driver.complete({ messages: [{ role: 'user', content: 'x' }], tools: [] })
+  assert.equal(seen.max_tokens, 256)
+
+  // 不配置时不带该字段，保持与厂商默认行为一致
+  const d2 = createOpenAiDriver({ baseUrl: url, apiKey: 'k', model: 'm' })
+  await d2.complete({ messages: [{ role: 'user', content: 'x' }], tools: [] })
+  assert.equal(seen.max_tokens, undefined)
+})
