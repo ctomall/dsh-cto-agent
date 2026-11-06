@@ -85,6 +85,23 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 | 文档↔代码欠账 | `CONFORMANCE.md` |
 | 阻塞说明 | `HANDOFF.md` |
 
+
+## 未结缺陷（2026-11-06，公网环境）
+
+**产物页在公网 Cookie 模式下不渲染数据（本机两种模式都正常）**
+
+| 环境 | 结果 |
+|---|---|
+| 本机 + `?token=`（无门禁） | `count=200 个`、`status=就绪`、200 行 |
+| 本机 + 口令门（Cookie 模式） | `count=200 个`、`status=就绪`、200 行 |
+| **公网 https://cto.ila3.top（Cookie 模式）** | `count='-'`、`status='空闲'`、1 行占位 |
+
+已排除：产物接口本身（公网页面内 `fetch('/api/artifacts?limit=200')` → 200、27KB、892ms）；
+静态资源（线上 `artifacts.js` 含最新 `fetchT`，`hasTimeout:true`）；JS 异常（`window.__errs` 为空）。
+
+下一步（未做）：在公网页面内插桩各 await 之间的时间戳，定位卡在哪一步；同时排查
+`/api/model/status` 在公网 Cookie 模式下是否 429/悬挂。
+
 ## 全面复验记录（2026-11-06 07:5x UTC）
 
 | 检查 | 命令 | 结果 |
