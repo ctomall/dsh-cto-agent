@@ -85,6 +85,15 @@ export class AgentLoop {
       return { status: 'failed' }
     }
 
+    // 并行 tool_call：只执行第一个，其余显式回报给模型（否则模型永远等不到结果）
+    if (Array.isArray(decision.others) && decision.others.length) {
+      for (const extra of decision.others) {
+        const eid = extra?.id || `call_extra_${steps}_${extra?.name ?? 'unknown'}`
+        this.rc.emitTo(runId, 'tool.finished', { callId: eid, ok: false, error: 'parallel_tool_calls_unsupported' })
+        messages.push({ role: 'tool', tool_call_id: eid, content: 'parallel_tool_calls_unsupported: 一次只执行一个工具，请逐个调用' })
+      }
+    }
+
     const call = decision.call
     const callId = call.id || `call_${steps}`
     this.rc.emitTo(runId, 'tool.started', { tool: call.name, callId })
