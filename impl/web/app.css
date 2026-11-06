@@ -291,6 +291,11 @@ kbd {
 .card.approval[data-decision="deny"] .decided { color: #b42318; }
 .card-head .decided { flex: none; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.row-del { margin-left: auto; flex: none; border: 0; background: transparent; color: var(--ink-meta); font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.row-del:hover { background: var(--n100); color: #b42318; }
+.row-del.armed { color: #b42318; background: #fff1f0; font-size: 11px; }
+li:not(:hover) > .row-del:not(.armed) { opacity: 0; }
+li:focus-within > .row-del { opacity: 1; }
 .grant-item { font-size: 12px; color: var(--n700); padding: 4px 0; }
 
 @media (max-width: 1023px) {

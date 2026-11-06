@@ -477,6 +477,36 @@ async function boot() {
     li.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSession() }
     })
+
+    // 删除：两段确认（先点 ✕，再点「确认删除」），避免误触直接把会话删干净
+    const del = el('button', 'row-del', '✕')
+    del.setAttribute('aria-label', `删除会话「${s.title}」`)
+    del.title = '删除会话'
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      if (del.dataset.armed !== '1') {
+        del.dataset.armed = '1'
+        del.textContent = '确认删除'
+        del.classList.add('armed')
+        setTimeout(() => {
+          if (del.dataset.armed === '1') { del.dataset.armed = '0'; del.textContent = '✕'; del.classList.remove('armed') }
+        }, 4000)
+        return
+      }
+      del.disabled = true
+      const { status, body } = await api(`/api/sessions/${s.id}`, { method: 'DELETE' })
+      if (status === 200) {
+        li.remove()
+        if (s.id === state.sessionId) location.href = '/'
+      } else {
+        del.disabled = false
+        del.textContent = '✕'
+        del.dataset.armed = '0'
+        setStatus(status === 409 ? '有进行中的 run，先停止再删' : `删除失败（${status}）`, 'error')
+        if (status === 409) body && console.warn('active runs:', body.active)
+      }
+    })
+    li.append(del)
     ul.append(li)
   }
 
