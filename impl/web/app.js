@@ -343,6 +343,14 @@ function subscribe(runId, { lastEventId = 0 } = {}) {
 
 async function send(text) {
   if (!text.trim()) return
+  // 会话可能还没加载出来（boot 慢、或刚打开页面就提交）：
+  // 此时不能带着 undefined 去创建 run，否则用户只会看到"提交失败"
+  if (!state.sessionId) {
+    const made = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ title: '新会话' }) })
+    if (made.status !== 200 && made.status !== 201) { setStatus('无法创建会话，请刷新重试', 'error'); return }
+    state.sessionId = made.body.id
+    history.replaceState(null, '', `/?sid=${encodeURIComponent(state.sessionId)}`)
+  }
   addUser(text)
   state.assistant = null
   state.decided = false
