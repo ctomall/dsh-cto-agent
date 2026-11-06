@@ -240,8 +240,22 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       .run(o.tenant_id ?? 't_a', 'system', 'run_interrupted', JSON.stringify({ runId: o.id }), ts)
   }
 
+  // 审批界面的安全响应头：防点击劫持 + 严格 CSP（页面无内联脚本/样式）
+  const SEC_HEADERS = {
+    'Content-Security-Policy':
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+  }
   return createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local')
+    const origWriteHead = res.writeHead.bind(res)
+    res.writeHead = (status, headers) => {
+      if (Array.isArray(headers)) return origWriteHead(status, [...headers, ...Object.entries(SEC_HEADERS)])
+      return origWriteHead(status, { ...(headers ?? {}), ...SEC_HEADERS })
+    }
 
     // —— 请求体上限：先看 content-length，避免把大包读进内存 ——
     const declared = Number(req.headers['content-length'] ?? 0)
