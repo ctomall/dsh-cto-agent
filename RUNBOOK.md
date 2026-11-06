@@ -166,3 +166,11 @@ sudo journalctl -u cube-agent-restore-drill.service -n 20 # 期望最后一行 p
 ```
 
 校验项：最新备份存在 → `integrity_check=ok` → 还原副本 → 独立实例 `/healthz` → `/api/overview` 可用 → 行数与还原库一致 → **负向：故意损坏一份副本，`integrity_check` 必须报错**（证明"损坏能被发现"）。
+
+## 公网可用性与升级窗口
+
+- 每次升级会 `process.exit(0)` 让 systemd 拉起新进程（`RestartSec=2`）。这个窗口内 cloudflared 连不上 origin，公网会返回 **502**：
+  `dial tcp 127.0.0.1:8787: connect: connection refused`
+- 窗口约 2–5 秒；**不是故障，但会被外部监控记一次失败**
+- 建议：升级放在低峰；外部探活用 2 次重试消除该窗口（`scripts/verify-online.sh` 已对 000/502/503/504 重试）
+- 判据：本机 `/healthz` 200 + 公网连续 3 次 200 才算恢复

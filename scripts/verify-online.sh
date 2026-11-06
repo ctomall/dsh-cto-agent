@@ -15,6 +15,17 @@ code() {
   printf '%s' "$c"
 }
 
+code2() { # 慢链路用：45s 超时，000 时最多再试 2 次
+  local c i
+  for i in 1 2 3; do
+    c=$(curl -s -o /dev/null -w '%{http_code}' -m 45 "$@") || c="000"
+    # 000=网络抖动；502/503/504=升级重启窗口内 origin 未就绪（cloudflared 连不上）
+    case "$c" in 000|502|503|504) : ;; *) printf '%s' "$c"; return 0 ;; esac
+    sleep 3
+  done
+  printf '%s' "$c"
+}
+
 echo "== 1) 等待就绪（/healthz，最多 40s）"
 ready=0
 for i in $(seq 1 40); do
@@ -34,7 +45,8 @@ if [ -f "$PW_FILE" ]; then
   jar=$(mktemp)
   lc=$(login_cookie "$BASE" "$jar" "$PW")
   [ "$lc" = "302" ] && ok "登录提交" "302" || no "登录提交" "期望 302，实际 $lc"
-  [ "$(code -b "$jar" "$BASE/")" = "200" ] && ok "带 Cookie 首页" "200" || no "带 Cookie 首页" "期望 200"
+  pc=$(code2 -b "$jar" "$BASE/")
+  [ "$pc" = "200" ] && ok "带 Cookie 首页" "200" || no "带 Cookie 首页" "期望 200，实际 $pc（隧道慢时可能 000）"
   T_A=$(cut -d= -f2- .runtime-tokens 2>/dev/null | head -1)
   if [ -n "${T_A:-}" ]; then
     ms=$(curl -s -b "$jar" -H "Authorization: Bearer $T_A" -m 15 "$BASE/api/model/status")
