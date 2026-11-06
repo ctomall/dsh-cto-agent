@@ -273,3 +273,15 @@ node scripts/gen-scripts-index.mjs   # 重建 scripts/README.md
 
 **说明**：带"优先用 …"的几条是早期针对公网写的版本，公网链路抖动会让它们不稳定；
 同名的确定性覆盖已移到 `check-*.mjs`（临时实例 + CDP），**保留旧脚本作为历史证据，不再作为门禁**。
+
+## 门禁稳定性自检（4 路并发跑全量）
+
+门禁在生产机上跑，和线上流量抢 CPU；时间敏感用例会因此**假红**，而假红会触发自动回滚。
+定期用这个方式压一遍，能提前发现"只在负载下才红"的用例：
+
+```bash
+for i in 1 2 3 4; do (node --test --test-concurrency=2 --test-timeout=30000 impl/test/*.test.mjs > /tmp/r$i.log 2>&1; echo "run$i exit=$?") & done; wait
+```
+
+- 期望：4 路全部 `pass 254 / fail 0`
+- 2026-11-07 实测：修掉「并发过高 / 固定毫秒断言 / 固定端口 / 单次超时即失败」四类根因后，4 路全绿
