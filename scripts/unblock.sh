@@ -55,6 +55,19 @@ if [ "$CHECK" = 1 ] || { [ -z "$MODEL_KEY" ] && [ -z "$CF_TOKEN" ]; }; then
   exit 2
 fi
 
+if [ -n "$CF_TOKEN" ] && [ "$PLAN" = 1 ]; then
+  echo "== --plan（不执行）：接入 Cloudflare Access + 边缘限流的步骤"
+  echo "  1) 校验三份 payload 形状（不发请求）： scripts/cf-access-setup.sh --dry-run"
+  echo "  2) 创建 Access 应用（self_hosted，domain=cto.ila3.top）并挂 email allow 策略"
+  echo "  3) 写 zone 级 http_ratelimit ruleset：/api/* 每 IP 120 次/分钟，超出 block 60s"
+  echo "  4) 复验： EDGE_ONLY=1 ./scripts/check-cf-edge.sh"
+  echo "     - 未授权访问应被边缘拦截（302 到 Access 登录，或 403）"
+  echo "     - 授权后页面/API 正常；/api/admin/upgrade 仍需 Cookie+token（应用层）"
+  echo "  5) 回滚：删除 Access 应用（access/apps/<id>）并清空 http_ratelimit ruleset"
+  echo "  注意：本步骤做的是**边缘**；应用层门禁与 token 校验不受影响，也不会被绕过"
+  exit 0
+fi
+
 if [ -n "$MODEL_KEY" ] && [ "$PLAN" = 1 ]; then
   echo "== --plan（不执行）：接入真实模型的步骤"
   echo "  1) 写入 $KEY_FILE（0600）与 $ENV_FILE 中的 MODEL_BASE_URL / MODEL_NAME / MODEL_API_KEY_FILE"
