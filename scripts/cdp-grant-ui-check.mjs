@@ -30,8 +30,12 @@ await until(`document.querySelector('#sbStatus')?.textContent?.includes('完成'
 
 // 第二次：同会话同工具 → 不应再弹卡
 const approvalsBefore = await ev(`document.querySelectorAll('.card.approval').length`)
+const blocksBefore = await ev(`document.querySelectorAll('.msg.assistant').length`)
 await send('再写一份')
+// 状态栏在发送前就是"完成"，不能直接等"完成"：先等它离开完成态，再等回来，最后等助手块
+await until(`!String(document.querySelector('#sbStatus')?.textContent ?? '').includes('完成')`, '第二次开始', 15000).catch(() => {})
 await until(`document.querySelector('#sbStatus')?.textContent?.includes('完成')`, '第二次完成', 30000)
+await until(`document.querySelectorAll('.msg.assistant').length > ${blocksBefore}`, '第二次助手块', 15000).catch(() => {})
 const second = await ev(`({
   approvalsAfter: document.querySelectorAll('.card.approval').length,
   autoNotes: [...document.querySelectorAll('.note')].map(n => n.textContent.trim()),
@@ -39,7 +43,9 @@ const second = await ev(`({
   artifacts: document.querySelectorAll('.artifact, .card.artifact').length,
   assistantBlocks: [...document.querySelectorAll('.msg.assistant .text')].map(t => t.textContent.slice(0, 40)),
 })`)
-console.log(JSON.stringify({ first, approvalsBefore, second }, null, 0))
+// 结论：同会话第二次不得新增审批卡；两轮应各有一个助手块
+const ok = Number(second.approvalsAfter) === Number(approvalsBefore) && second.assistantBlocks.length === 2
+console.log(JSON.stringify({ first, approvalsBefore, second, verdict: { approvalsSame: Number(second.approvalsAfter) === Number(approvalsBefore), blocks: second.assistantBlocks.length, ok } }, null, 0))
 const s = await raw('Page.captureScreenshot', { format: 'png' }, 20000)
 ;(await import('node:fs')).writeFileSync('/tmp/grant-ui2.png', Buffer.from(s.data, 'base64'))
 await raw('Page.close', {}, 5000).catch(() => {}); ws.close()
