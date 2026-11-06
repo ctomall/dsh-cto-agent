@@ -153,7 +153,6 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   for (const b of ['api', 'runs', 'upgrade', 'login']) metrics.inc('rate_limited_total', { bucket: b }, 0)
   metrics.inc('login_failures_total', {}, 0)
   metrics.inc('grants_revoked_total', {}, 0)
-  for (const st of ['done', 'failed', 'canceled']) metrics.inc('runs_finished_total', { status: st }, 0)
   metrics.inc('run_concurrency_rejected_total', {}, 0)
   const gate = createGate({ password: process.env.APP_PASSWORD, secret: process.env.APP_SESSION_SECRET })
   // Cookie 身份门只证明"过了口令"，不区分租户；API 身份统一在这里解析：
@@ -403,6 +402,8 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       metrics.set('session_grants', {}, Number(db.prepare('select count(*) c from session_grants').get().c))
       // run 结局分布从库里现算：比在每条结束路径上打点更不容易漏（结束路径有 3+ 条）
       try {
+        // 先置 0 再覆盖：否则某个结局一条都没有时序列会消失，"0"和"没这个指标"又分不清了
+        for (const st of ['done', 'failed', 'canceled']) metrics.set('runs_finished_total', { status: st }, 0)
         for (const row of db.prepare("select status, count(*) c from runs where status in ('done','failed','canceled') group by status").all()) {
           metrics.set('runs_finished_total', { status: row.status }, Number(row.c))
         }
