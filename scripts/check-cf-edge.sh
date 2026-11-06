@@ -4,7 +4,7 @@
 # 用法：CLOUDFLARE_API_TOKEN=… CF_ACCOUNT_ID=… CF_ZONE_ID=… ./scripts/check-cf-edge.sh [HOST]
 set -uo pipefail
 HOST="${1:-cto.ila3.top}"
-API="https://api.cloudflare.com/client/v4"
+API="${CF_API_BASE:-https://api.cloudflare.com/client/v4}"   # 可用 CF_API_BASE 指向本地 mock 自测
 TOKEN="${CLOUDFLARE_API_TOKEN:-}"; ACC="${CF_ACCOUNT_ID:-}"; ZONE="${CF_ZONE_ID:-}"
 pass=0; fail=0; skip=0
 ok(){ printf '  ✔ %-30s %s\n' "$1" "$2"; pass=$((pass+1)); }
@@ -46,6 +46,12 @@ rs=$(curl -sS -m 20 "${hdr[@]}" "$API/zones/$ZONE/rulesets/phases/http_ratelimit
 echo "$rs" | grep -q '"rules"' && ok "限流规则集" "已配置" || no "限流规则集" "$(echo "$rs" | head -c 140)"
 echo "$rs" | grep -q "$HOST" && ok "限流命中该域名" "$HOST" || no "限流命中该域名" "表达式里没有 $HOST"
 
+fi
+
+if [ "${CF_API_ONLY:-0}" = "1" ]; then
+  echo "== 结果：pass=$pass fail=$fail skip=$skip（CF_API_ONLY=1，未跑边缘行为探测）"
+  [ "$fail" -eq 0 ] || exit 1
+  exit 0
 fi
 
 echo "== 3) 边缘行为：未授权必须被挡在 Cloudflare（而不是落到应用的 /login）"

@@ -222,7 +222,7 @@ sysctl net.ipv4.tcp_mtu_probing → 0             （内核对 PMTU 黑洞不做
 
 ```bash
 git clone git@github.com:ctomall/dsh-cto-agent.git && cd dsh-cto-agent
-node --test impl/test/*.test.mjs            # 276 通过
+node --test impl/test/*.test.mjs            # 278 通过
 APP_PASSWORD='pw-1' APP_SESSION_SECRET='secret-1234567890' \
 CUBE_TOKENS='{"tok_a":{"tenantId":"t_a","userId":"u_a"},"tok_b":{"tenantId":"t_b","userId":"u_b"}}' \
 PORT=8899 DB_PATH=/tmp/vc/cube.db WORKSPACE_ROOT=/tmp/vc/ws node impl/src/server.mjs &

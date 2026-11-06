@@ -13,7 +13,7 @@
 输出形如：
 
 ```
-✔ node --test        276/276 通过
+✔ node --test        278/278 通过
 ✔ secret-scan        pass=6 fail=0
 ✔ a11y-contrast      全部达标
 ✔ ratelimit-check    pass=4 fail=0
