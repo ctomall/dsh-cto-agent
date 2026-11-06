@@ -746,9 +746,21 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       if (busy) return reply(res, json(409, { error: 'active_run', runId: busy.id }))
 
       const runId = `r${Date.now()}${(seq++).toString(36)}`
-      // 模型 loop：事件序列由 driver 决策产生，不是硬编码；跑到审批处会挂起
       metrics.inc('runs_created_total', { driver: driver.name.startsWith('fake') ? 'fake' : 'real' })
-      await loop.start({ runId, tenantId: ctx.tenantId, sessionId, input: String(body.input ?? '') })
+      // 立刻返回 202，再在后台跑 loop：真模型单步可能要几十秒，
+      // 若在这里 await，创建请求会一直挂着（边缘/代理会在 100s 左右掐断）
+      // 等待窗口：默认 0（立刻返回，后台跑）。测试可设 RUN_CREATE_WAIT_MS 让它等到
+      // run 走到第一个停点（审批/结束），从而确定性地断言状态。
+      const waitMs = numEnv('RUN_CREATE_WAIT_MS', 0)
+      const started = loop.start({ runId, tenantId: ctx.tenantId, sessionId, input: String(body.input ?? '') })
+      started.catch((e) => console.error(`[cube-agent] run ${runId} 启动失败：`, e?.message ?? e))
+      if (waitMs > 0) {
+        const settled = await Promise.race([
+          started.then(() => 'done').catch(() => 'failed'),
+          new Promise((r) => setTimeout(() => r('timeout'), waitMs)),
+        ])
+        return reply(res, json(202, { runId, sessionId, driver: driver.name, waited: settled }))
+      }
       return reply(res, json(202, { runId, sessionId, driver: driver.name }))
     }
 

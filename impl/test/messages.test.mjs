@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+// 创建 run 默认不等模型；测试需要确定性状态，开一个等待窗口
+process.env.RUN_CREATE_WAIT_MS = process.env.RUN_CREATE_WAIT_MS ?? '8000'
+
 async function boot(t) {
   const { createApp } = await import('../src/server.mjs')
   const { openDb, seedTwoTenants } = await import('../src/db.mjs')

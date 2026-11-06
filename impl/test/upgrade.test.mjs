@@ -2,6 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createUpgrade, createUpgradeRoute, UpgradeError } from '../src/upgrade.mjs'
 
+// 创建 run 默认不等模型；这些用例需要确定性状态
+process.env.RUN_CREATE_WAIT_MS = process.env.RUN_CREATE_WAIT_MS ?? '8000'
+
 // 用可注入的假 git，断言"发的是哪条命令、错了怎么返回"，避免测试依赖真实远程
 function fakeExec(handlers) {
   const calls = []

@@ -5,6 +5,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+// 创建 run 默认不等模型；测试需要确定性状态，开一个等待窗口
+process.env.RUN_CREATE_WAIT_MS = process.env.RUN_CREATE_WAIT_MS ?? '8000'
+
 // 端到端：真实 HTTP → OpenAI 兼容 provider（本地 mock，走流式协议）→ 工具调用 → 审批 → 产物
 // 目的：把"配好 key 之后到底通不通"这件事，在拿不到真 key 时也能先验证一遍。
 function mockProvider() {
