@@ -48,6 +48,13 @@ else
   sk "docs-check" "没有验收汇总可比对"
 fi
 
+echo "== 7) 密钥是否外泄到日志/数据库"
+if ./scripts/secret-leak-scan.sh >/tmp/vl.log 2>&1; then
+  ok "secret-leak-scan" "$(grep -E '^== 汇总' /tmp/vl.log | tail -1)"
+else
+  no "secret-leak-scan" "$(grep -E '✖' /tmp/vl.log | head -2 | tr '\n' ' ')"
+fi
+
 echo
 echo "== 结论：pass=$pass fail=$fail skip=$skip"
 [ "$fail" -eq 0 ] || exit 1
