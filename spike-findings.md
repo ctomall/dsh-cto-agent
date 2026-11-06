@@ -1,6 +1,7 @@
 # 阶段 1 spike 结论：代码已跑，结论是「未通过，但推翻了文档的一条核心假设」
 
-> 产物：`cube-agent/impl/spike-load-real-plugin.mjs`（可执行）+ `cube-agent/spike-output.log`（原始输出）
+> 产物：`cube-agent/impl/spike-load-real-plugin.mjs`（可执行）。原始输出 `spike-output.log` 已从仓库移除
+> （历史运行产物不入库，避免过期日志冒充当前证据）；如需复跑：直接执行那个 spike 脚本。
 > 环境：Node **v24.22.2**；`@deepseek-ai/dsh` **0.2.1-rc.5**；`@deepseek-ai/cordis` **4.0.5**
 > 方式：真实 `Context` + 真实 `@deepseek-ai/*` 包，不使用文档推断
 

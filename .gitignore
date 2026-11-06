@@ -7,3 +7,8 @@ tmp/
 .runtime-tokens
 
 .runtime-app-password
+
+# 历史运行产物（测试输出/探针结果）：不入库，避免过期日志冒充"当前证据"
+logs/
+spike-*.log
+*.mutbak
