@@ -744,6 +744,14 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         .get(sessionId, ctx.tenantId)
       if (!owned) return reply(res, json(404, { error: 'not_found' }))
 
+      // 全局并发上限：真模型下每条 running 的 run 都在花一次请求。
+      // 没有上限时，多会话并发提交就能把并发/费用顶上去（限流是按 IP/分钟的，不防这个）。
+      const maxConcurrent = numEnv('AGENT_MAX_CONCURRENT', 4)
+      const running = db.prepare("select count(*) c from runs where status = 'running'").get().c
+      if (Number(running) >= maxConcurrent) {
+        return reply(res, json(429, { error: 'too_many_runs', limit: maxConcurrent, running: Number(running), retryAfter: 5 }))
+      }
+
       // 同一会话同时只允许一条"正在执行"的 run：多个标签页/多台设备同时提交时，
       // 第二个应在源头上被拒（否则真模型下是两笔计费）。等待审批的 run 不算，
       // 因为一个会话里可以有多条待审批。

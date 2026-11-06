@@ -84,3 +84,9 @@ test('前端处理 409 active_run：接管已有 run 而不是再创建一条', 
   assert.match(js, /active_run/, 'app.js 未处理 active_run')
   assert.match(js, /正在接管它的输出/, '缺少接管提示文案')
 })
+
+test('前端区分"并发上限"的 429（不能都提示成点太快）', () => {
+  const js = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.match(js, /too_many_runs/, 'app.js 未处理 too_many_runs')
+  assert.match(js, /同时在跑的太多/, '缺少并发上限提示文案')
+})

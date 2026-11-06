@@ -390,7 +390,16 @@ async function send(text) {
   state.sawArtifact = false
   setStatus('已提交', 'running')
   const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
-  if (status === 429) { state.inflight = false; setStatus(rateLimitedText(body, '发送'), 'error'); return }
+  if (status === 429) {
+    state.inflight = false
+    // 全局并发上限与"每分钟次数"是两种 429：提示要能区分，否则用户会以为是自己点太快
+    if (body?.error === 'too_many_runs') {
+      setStatus(`同时在跑的太多（上限 ${body.limit}），约 ${body.retryAfter ?? 5}s 后再试`, 'error')
+      return
+    }
+    setStatus(rateLimitedText(body, '发送'), 'error')
+    return
+  }
   if (status === 409 && body?.error === 'active_run') {
     // 别的标签页/设备已经在跑：接管它的输出，不再创建第二条
     state.runId = body.runId
