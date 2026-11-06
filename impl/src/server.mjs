@@ -654,6 +654,41 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(201, { id, title }))
     }
 
+    // —— 会话删除（DELETE）：级联清理 messages/runs/events/grants/pending/tool_results ——
+    if (req.method === 'DELETE' && /^\/api\/sessions\/[^/]+$/.test(url.pathname)) {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const sid = decodeURIComponent(url.pathname.split('/').pop())
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sid, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      // 有活动 run 时拒绝：先取消再删，避免把正在跑的东西从下面抽走
+      const active = db
+        .prepare("select count(*) c from runs where tenant_id = ? and session_id = ? and status in ('running','waiting_approval','queued')")
+        .get(ctx.tenantId, sid).c
+      if (active > 0) return reply(res, json(409, { error: 'has_active_runs', active }))
+      const runIds = db.prepare('select id from runs where tenant_id = ? and session_id = ?').all(ctx.tenantId, sid).map((r) => r.id)
+      let removed = { messages: 0, runs: 0, events: 0, grants: 0, pending: 0, toolResults: 0 }
+      db.exec('begin')
+      try {
+        for (const rid of runIds) {
+          removed.events += Number(db.prepare('delete from events where run_id = ?').run(rid).changes ?? 0)
+          removed.toolResults += Number(db.prepare('delete from run_tool_results where run_id = ?').run(rid).changes ?? 0)
+        }
+        removed.pending = Number(db.prepare('delete from run_pending where tenant_id = ? and session_id = ?').run(ctx.tenantId, sid).changes ?? 0)
+        removed.grants = Number(db.prepare('delete from session_grants where tenant_id = ? and session_id = ?').run(ctx.tenantId, sid).changes ?? 0)
+        removed.messages = Number(db.prepare('delete from messages where tenant_id = ? and session_id = ?').run(ctx.tenantId, sid).changes ?? 0)
+        removed.runs = Number(db.prepare('delete from runs where tenant_id = ? and session_id = ?').run(ctx.tenantId, sid).changes ?? 0)
+        db.prepare('delete from sessions where id = ? and tenant_id = ?').run(sid, ctx.tenantId)
+        db.prepare('insert into audit_log (tenant_id, actor, action, detail_json, ts) values (?,?,?,?,?)')
+          .run(ctx.tenantId, ctx.userId, 'session_deleted', JSON.stringify({ sessionId: sid, removed }), new Date().toISOString())
+        db.exec('commit')
+      } catch (e) {
+        try { db.exec('rollback') } catch {}
+        return reply(res, json(500, { error: 'delete_failed', message: String(e.message ?? e) }))
+      }
+      return reply(res, json(200, { deleted: true, sessionId: sid, removed }))
+    }
+
     // —— 会话重命名（PATCH）：列表里全是"验收会话"时，改个名字比新建一百个有用 ——
     if (req.method === 'PATCH' && url.pathname.startsWith('/api/sessions/') && !url.pathname.includes('/grants')) {
       const ctx = ctxOf(req)
