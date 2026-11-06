@@ -284,6 +284,8 @@ kbd {
 .art-main { min-width: 0; flex: 1; }
 .art-name { font-size: 13px; color: var(--n1000); overflow-wrap: anywhere; }
 .art-acts { display: flex; gap: 8px; flex: none; }
+.title-input { font: inherit; color: inherit; background: var(--n00); border: 1px solid var(--blue600); border-radius: 6px; padding: 2px 8px; min-width: 160px; }
+#title[tabindex] { cursor: text; }
 .grant-item { font-size: 12px; color: var(--n700); padding: 4px 0; }
 
 @media (max-width: 1023px) {

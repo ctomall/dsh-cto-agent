@@ -654,6 +654,22 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(201, { id, title }))
     }
 
+    // —— 会话重命名（PATCH）：列表里全是"验收会话"时，改个名字比新建一百个有用 ——
+    if (req.method === 'PATCH' && url.pathname.startsWith('/api/sessions/') && !url.pathname.includes('/grants')) {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const pm = /^\/api\/sessions\/([^/]+)$/.exec(url.pathname)
+      if (!pm) return reply(res, json(404, { error: 'not_found' }))
+      const sid = decodeURIComponent(pm[1])
+      const owned = db.prepare('select 1 from sessions where id = ? and tenant_id = ?').get(sid, ctx.tenantId)
+      if (!owned) return reply(res, json(404, { error: 'not_found' }))
+      const body = await readJson(req)
+      const raw = String(body.title ?? '').trim()
+      if (!raw || raw.length > 60) return reply(res, json(400, { error: 'invalid_title', limit: 60 }))
+      db.prepare('update sessions set title = ? where id = ? and tenant_id = ?').run(raw, sid, ctx.tenantId)
+      return reply(res, json(200, { id: sid, title: raw }))
+    }
+
     // —— 撤销会话级授权（已知缺口补口：v16 明确写过"撤销口径缺失"）——
     const rv = /^\/api\/sessions\/([^/]+)\/grants\/revoke$/.exec(url.pathname)
     if (req.method === 'POST' && rv) {

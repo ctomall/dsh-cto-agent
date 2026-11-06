@@ -349,6 +349,39 @@ async function loadDriver() {
   elx.title = body.real ? `模型：${body.driver}` : `未配置真实模型：${body.source ?? ''}（见 HANDOFF ①）`
 }
 
+// 会话重命名：双击（或聚焦后回车）就地编辑；Enter 保存，Esc 取消
+async function startRename() {
+  const h = $('#title')
+  if (!h || h.dataset.editing === '1') return
+  const original = h.textContent
+  h.dataset.editing = '1'
+  const input = document.createElement('input')
+  input.className = 'title-input'
+  input.value = original
+  input.maxLength = 60
+  h.textContent = ''
+  h.append(input)
+  input.focus()
+  input.select()
+  const finish = async (save) => {
+    if (h.dataset.editing !== '1') return
+    h.dataset.editing = '0'
+    const next = input.value.trim()
+    input.remove()
+    if (!save || !next || next === original) { h.textContent = original; return }
+    const { status } = await api(`/api/sessions/${state.sessionId}`, { method: 'PATCH', body: JSON.stringify({ title: next }) })
+    h.textContent = status === 200 ? next : original
+    if (status !== 200) setStatus('重命名失败', 'error')
+    loadSessions().catch(() => {})
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true) }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false) }
+  })
+  input.addEventListener('blur', () => finish(true))
+  return input
+}
+
 async function loadHistory() {
   const { status, body } = await api(`/api/sessions/${state.sessionId}/messages`)
   if (status !== 200 || !body.messages?.length) return
@@ -424,6 +457,11 @@ async function boot() {
   await loadActive()
   await loadGrants()
   await loadArtifacts()
+  const titleEl = $('#title')
+  if (titleEl) {
+    titleEl.addEventListener('dblclick', startRename)
+    titleEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startRename() } })
+  }
   if (demo) await send('把这三个 PDF 汇总成一份带目录的 docx')
 }
 
@@ -444,6 +482,11 @@ $('#revoke').addEventListener('click', async () => {
   if (status === 200) {
     await loadGrants()
   await loadArtifacts()
+  const titleEl = $('#title')
+  if (titleEl) {
+    titleEl.addEventListener('dblclick', startRename)
+    titleEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startRename() } })
+  }
     if (!body.revoked) $('#grants').textContent = '没有可撤销的授权'
   } else {
     $('#grants').textContent = `撤销失败（${status}）`
