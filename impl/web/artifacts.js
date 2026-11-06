@@ -1,5 +1,17 @@
 // 产物页：跨会话列出本租户产物，可下载；数据来自 /api/artifacts
 const token = new URLSearchParams(location.search).get('token')
+// 公网链路会丢包：没有超时的 fetch 会让页面"永远转圈、永不报错"（实测卡死一次）
+const FETCH_TIMEOUT_MS = 15000
+const fetchT = async (path, opts = {}) => {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+  try {
+    return await fetch(path, { ...opts, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const $ = (s) => document.querySelector(s)
 const el = (tag, cls, text) => {
   const n = document.createElement(tag)
@@ -8,7 +20,12 @@ const el = (tag, cls, text) => {
   return n
 }
 const api = async (path) => {
-  const r = await fetch(path, { headers: token ? { authorization: `Bearer ${token}` } : {} })
+  let r
+  try {
+    r = await fetchT(path, { headers: token ? { authorization: `Bearer ${token}` } : {} })
+  } catch (e) {
+    return { status: 0, body: { error: e?.name === 'AbortError' ? 'timeout' : String(e?.message ?? e) } }
+  }
   let body = null
   try { body = await r.json() } catch {}
   return { status: r.status, body }

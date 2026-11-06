@@ -49,3 +49,14 @@ test('429 有统一人话（不能让用户看到泛化的「失败」）', () =
   assert.match(js, /过于频繁/, '文案要说明是限流')
   assert.match(sjs, /过于频繁/, '探针也要有 429 文案')
 })
+
+test('页面脚本都必须有 fetch 超时（公网丢包不能把页面卡死）', () => {
+  for (const f of ['app.js', 'overview.js', 'artifacts.js', 'settings.js']) {
+    const js = readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8')
+    assert.match(js, /FETCH_TIMEOUT_MS/, `${f} 缺少超时常量`)
+    assert.match(js, /function fetchT|const fetchT/, `${f} 缺少 fetchT 包装`)
+    // 不允许再出现"裸 fetch"（除 fetchT 自身内部那一处）
+    const bare = js.split('\n').filter((l) => /\bfetch\(/.test(l) && !/return await fetch\(path/.test(l))
+    assert.equal(bare.length, 0, `${f} 仍有裸 fetch：\n${bare.join('\n')}`)
+  }
+})

@@ -1,8 +1,25 @@
 // 设置页：只读展示运行时配置（不含任何密钥）
 const token = new URLSearchParams(location.search).get('token')
+// 公网链路会丢包：没有超时的 fetch 会让页面"永远转圈、永不报错"（实测卡死一次）
+const FETCH_TIMEOUT_MS = 15000
+const fetchT = async (path, opts = {}) => {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+  try {
+    return await fetch(path, { ...opts, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const $ = (s) => document.querySelector(s)
 const api = async (path) => {
-  const r = await fetch(path, { headers: token ? { authorization: `Bearer ${token}` } : {} })
+  let r
+  try {
+    r = await fetchT(path, { headers: token ? { authorization: `Bearer ${token}` } : {} })
+  } catch (e) {
+    return { status: 0, body: { error: e?.name === 'AbortError' ? 'timeout' : String(e?.message ?? e) } }
+  }
   let body = null
   try { body = await r.json() } catch {}
   return { status: r.status, body }
@@ -56,7 +73,7 @@ async function main() {
   btn.addEventListener('click', async () => {
     btn.disabled = true; out.textContent = '测试中…'
     try {
-      const r = await fetch('/api/model/probe', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} })
+      const r = await fetchT('/api/model/probe', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} })
       const j = await r.json().catch(() => ({}))
       if (r.status === 429) { const w = Number(r.headers.get('retry-after')); out.textContent = `请求过于频繁${w > 0 ? `，请 ${w} 秒后再试` : '，请稍后再试'}` }
       else if (r.status === 200 && j.ok) out.textContent = `✔ ${j.driver} · ${j.ms}ms · ${JSON.stringify(j.sample)}`

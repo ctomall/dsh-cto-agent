@@ -3,6 +3,18 @@
 const qs = new URLSearchParams(location.search)
 const token = qs.get('token') || ''
 
+// 公网链路会丢包：没有超时的 fetch 会让页面"永远转圈、永不报错"（实测卡死一次）
+const FETCH_TIMEOUT_MS = 15000
+const fetchT = async (path, opts = {}) => {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+  try {
+    return await fetch(path, { ...opts, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const $ = (sel) => document.querySelector(sel)
 const el = (tag, cls, text) => {
   const n = document.createElement(tag)
@@ -116,7 +128,8 @@ async function loadUsage() {
   const el = document.querySelector('#usage')
   if (!el) return
   try {
-    const r = await fetch('/api/usage?days=7', { headers: token ? { authorization: `Bearer ${token}` } : {} })
+    const r = await fetchT('/api/usage?days=7', { headers: token ? { authorization: `Bearer ${token}` } : {} }).catch(() => null)
+    if (!r) { el.textContent = '用量 -（超时）'; return }
     if (r.status !== 200) { el.textContent = '用量 -'; return }
     const u = await r.json()
     el.textContent = `近 ${u.days} 天 · ${u.runs} 次运行 · ${u.tokens.total} tokens`
@@ -156,7 +169,8 @@ document.addEventListener('keydown', (e) => {
 })
 
 async function load() {
-  const res = await fetch('/api/overview', { headers: token ? { authorization: `Bearer ${token}` } : {} })
+  const res = await fetchT('/api/overview', { headers: token ? { authorization: `Bearer ${token}` } : {} }).catch(() => null)
+  if (!res) { if ($('#status')) $('#status').textContent = '读取失败（超时）'; return }
   if (!res.ok) {
     $('#layers').append(el('div', 'empty', res.status === 401 ? '未认证：请先通过登录门' : `读取失败（${res.status}）`))
     return

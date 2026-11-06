@@ -29,8 +29,20 @@ const state = {
   decided: false, artifacts: 0, sessionId,
 }
 
+// 公网链路会丢包：没有超时的 fetch 会让页面"永远转圈、永不报错"（实测卡死一次）
+const FETCH_TIMEOUT_MS = 15000
+const fetchT = async (path, opts = {}) => {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
+  try {
+    return await fetch(path, { ...opts, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await fetchT(path, {
     ...opts,
     headers: {
       'content-type': 'application/json',
@@ -376,7 +388,7 @@ async function loadPending() {
 
 async function lastSeq(runId) {
   try {
-    const res = await fetch(`/api/runs/${runId}/events?replay=1&token=${encodeURIComponent(token)}`)
+    const res = await fetchT(`/api/runs/${runId}/events?replay=1&token=${encodeURIComponent(token)}`)
     const text = await res.text()
     const ids = [...text.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]))
     return ids.length ? Math.max(...ids) : 0
@@ -471,7 +483,7 @@ async function boot() {
   $('#who').textContent = `tenant ${me.body.tenantId}`
   $('#sbTenant').textContent = me.status === 200 ? `tenant ${me.body.tenantId}` : '-'
 
-  const v = await fetch('/api/version').then((r) => r.json()).catch(() => ({ sha: '-' }))
+  const v = await fetchT('/api/version').then((r) => r.json()).catch(() => ({ sha: '-' }))
   $('#sbBuild').textContent = `build ${v.sha}`
   $('#sbTime').textContent = new Date().toTimeString().slice(0, 8)
   $('#sbStatus').textContent = '空闲'
