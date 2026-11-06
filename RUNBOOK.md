@@ -223,5 +223,12 @@ node scripts/readiness-report.mjs --base http://127.0.0.1:8787
 
 这类"对验收器的测试"应当定期跑：**判据松了，绿灯就是装饰**。
 
+**两个方向都要验**：
+
+```bash
+./scripts/check-arbiter-bites.sh             # 故障实例 → ① 必须变红（约 23s）
+./scripts/check-arbiter-bites.sh --positive  # 正常实例 → ① 必须全绿（约 3s，证明判据可满足）
+```
+
 - 自检现在 **23 秒**跑完（`ACCEPT_ONLY=1` 只跑 ①，`ACCEPT_WAIT_*=20` 把等待压短），**已纳入 `verify-all` 第 8 步**
 - 验收器的等待超时可用 `ACCEPT_WAIT_TOOL/APPROVAL/ARTIFACT/FINISH` 调整（默认 180/120/180/120s，面向真实厂商）

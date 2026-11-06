@@ -3,11 +3,26 @@
 # 这是对验收器的测试——防止它变成只发绿灯的装饰。
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+MODE="${1:-bites}"; MODE="${MODE#--}"   # bites=故障实例应变红；--positive=正常实例应全绿
 WORK=$(mktemp -d); MOCK=8991; APP=8992
 cleanup(){ for p in $MOCK $APP; do local pid; pid=$(ss -ltnp 2>/dev/null | awk -v pp=":$p " '$0 ~ pp {print $NF}' | grep -oP 'pid=\K[0-9]+' | head -1); [ -n "${pid:-}" ] && kill -9 "$pid" 2>/dev/null; done; rm -rf "$WORK"; }
 trap cleanup EXIT
 
-cat > "$WORK/mock.mjs" <<'JS'
+if [ "$MODE" = "positive" ]; then
+  cat > "$WORK/mock.mjs" <<'JS'
+import { createServer } from 'node:http'
+// 正常路径：审批通过 → 写到合法路径 → 有 artifact
+createServer((req,res)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{
+  const b=(()=>{try{return JSON.parse(raw)}catch{return {}}})()
+  const hasTool=(b.messages??[]).some(m=>m.role==='tool')
+  res.writeHead(200,{'content-type':'application/json'})
+  res.end(JSON.stringify({choices:[{message: hasTool
+    ? {role:'assistant',content:'写好了'}
+    : {tool_calls:[{id:'c1',type:'function',function:{name:'fs.write',arguments:JSON.stringify({path:'ok.md',content:'# ok'})}}]}}]}))
+})}).listen(Number(process.env.MOCK_PORT))
+JS
+else
+  cat > "$WORK/mock.mjs" <<'JS'
 import { createServer } from 'node:http'
 // 审批会发生（fs.write 需确认），但路径越界 → 工具失败、没有 artifact
 createServer((req,res)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{
@@ -19,6 +34,7 @@ createServer((req,res)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{
     : {tool_calls:[{id:'c1',type:'function',function:{name:'fs.write',arguments:JSON.stringify({path:'../../escape.md',content:'x'})}}]}}]}))
 })}).listen(Number(process.env.MOCK_PORT))
 JS
+fi
 MOCK_PORT=$MOCK node "$WORK/mock.mjs" >/dev/null 2>&1 &
 sleep 1
 APP_PASSWORD='bite-pw' APP_SESSION_SECRET='bite-secret-1234567890' \
@@ -35,6 +51,15 @@ line=$(printf '%s\n' "$out" | grep -E '审批后产出' | head -1)
 sum=$(printf '%s\n' "$out" | grep -E '^== 汇总' | tail -1)
 printf '%s\n' "$line"
 printf '%s\n' "$sum"
+if [ "$MODE" = "positive" ]; then
+  # 预期：① 四段全 ✔，且 fail=0（证明判据"可满足"，不是永远红）
+  if printf '%s' "$sum" | grep -qE 'fail=0' && ! printf '%s\n' "$out" | sed -n '/① 真实模型/,/② 会话级/p' | grep -q '✖'; then
+    echo "OK: 正常链路下 ① 全绿（判据可满足）"
+    exit 0
+  fi
+  echo "FAIL: 正常链路却没通过 ①（判据过严或实现有洞）"
+  exit 1
+fi
 # 预期：审批后产出必须 ✖，且汇总里 fail >= 1
 if printf '%s' "$line" | grep -q '✖' && printf '%s' "$sum" | grep -qE 'fail=[1-9]'; then
   echo "OK: 验收器会咬人（制造故障后 ① 变红）"
