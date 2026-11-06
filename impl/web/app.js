@@ -3,7 +3,9 @@
 const qs = new URLSearchParams(location.search)
 const token = qs.get('token') || ''
 const demo = qs.get('demo') === '1'
-const sessionId = qs.get('sid') || 's_a1'
+// 不再用硬编码的 s_a1 兜底：它只存在于种子数据，生产上没有这个会话，
+// 结果就是"没带 ?sid= 的首次访问，点发送什么也不会发生"（公网实测踩到）
+const sessionId = qs.get('sid') || ''
 
 const $ = (sel) => document.querySelector(sel)
 const el = (tag, cls, text) => {
@@ -478,6 +480,25 @@ async function boot() {
   if (cur.status === 200 && cur.body.session?.title) $('#title').textContent = cur.body.session.title
 
   const { body } = await api('/api/sessions')
+  // 没带 sid：落到最近的会话；一个都没有就新建一个，保证"进来就能用"
+  if (!state.sessionId) {
+    const first = body.sessions?.[0]
+    if (first) {
+      state.sessionId = first.id
+      const u = new URL(location.href)
+      u.searchParams.set('sid', state.sessionId)
+      if (!token) u.searchParams.delete('token')
+      history.replaceState(null, '', u.toString())
+    } else {
+      const made = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ title: '新的会话' }) })
+      if (made.status === 201 || made.status === 200) {
+        state.sessionId = made.body.id
+        const u = new URL(location.href)
+        u.searchParams.set('sid', state.sessionId)
+        history.replaceState(null, '', u.toString())
+      }
+    }
+  }
   const ul = $('#sessions')
   ul.textContent = ''
   for (const s of body.sessions || []) {
