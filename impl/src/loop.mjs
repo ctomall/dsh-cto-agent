@@ -178,7 +178,13 @@ export class AgentLoop {
       this.grants.add({ tenantId: p.tenantId, sessionId: p.sessionId, tool: p.call.name })
     }
 
-    this.rc.transition(runId, 'running')
+    // 竞态保护：判完终态到真正迁移之间，可能被 cancel 抢先改状态；
+    // 这里不抛 500，而是返回 state_changed 让调用方按"已变化"处理
+    try {
+      this.rc.transition(runId, 'running')
+    } catch (e) {
+      return { status: this.rc.status(runId), note: 'state_changed', error: String(e.message ?? e) }
+    }
     return this.executeAndContinue({
       runId,
       messages: p.messages,
