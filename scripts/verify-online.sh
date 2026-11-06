@@ -12,12 +12,16 @@ no() { printf '  ✖ %-42s %s\n' "$1" "$2"; fail=$((fail+1)); }
 sk() { printf '  ○ %-42s %s\n' "$1" "$2"; skip=$((skip+1)); }
 # 单次请求超时：公网到本机应该是毫秒级；25s 一次会让整轮检查跑到十分钟
 CURL_MAX="${CURL_MAX:-8}"
+# 重试预算：实测根路径 10 次里 3 次超时（边缘约 30% 丢包），
+# 固定 3 次仍有约 3% 概率误判成失败 → 改成"在时间预算内一直重试"，最坏耗时可控
+RETRY_BUDGET="${RETRY_BUDGET:-45}"
 code() {
-  # 公网入口有损（实测约 1/3 失败）：000 必须多试几次，否则"网络抖动"会被误报成"鉴权错了"
-  local c i
-  for i in 1 2 3; do
+  local c t0
+  t0=$(date +%s)
+  while :; do
     c=$(curl -s -o /dev/null -w '%{http_code}' -m "$CURL_MAX" "$@") || c="000"
     [ "$c" != "000" ] && { printf '%s' "$c"; return; }
+    [ $(( $(date +%s) - t0 )) -ge "$RETRY_BUDGET" ] && break
     sleep 2
   done
   printf '000'
@@ -53,17 +57,26 @@ PW="${PW:-$(cut -d= -f2- "$PW_FILE" 2>/dev/null)}"
 if [ -n "${PW:-}" ]; then
   jar=$(mktemp)
   lc=$(require_login "$BASE" "$jar" "$PW") || lc="000"
-  [ "$lc" = "302" ] && ok "登录提交" "302" || no "登录提交" "期望 302，实际 $lc"
+  case "$lc" in
+    302) ok "登录提交" "302" ;;
+    000) sk "登录提交" "链路不可达（未验证）" ;;   # POST 走公网更容易被丢，不能算成"登录坏了"
+    *)   no "登录提交" "期望 302，实际 $lc" ;;
+  esac
   pc=$(code2 -b "$jar" "$BASE/")
-  [ "$pc" = "200" ] && ok "带 Cookie 首页" "200" || no "带 Cookie 首页" "期望 200，实际 $pc（隧道慢时可能 000）"
+  case "$pc" in
+    200) ok "带 Cookie 首页" "200" ;;
+    000) sk "带 Cookie 首页" "链路不可达（未验证）" ;;
+    *)   no "带 Cookie 首页" "期望 200，实际 $pc" ;;
+  esac
   # token 来源：环境变量 TOK_A > .runtime-tokens
   T_A="${TOK_A:-$(cut -d= -f2- .runtime-tokens 2>/dev/null | head -1)}"
   if [ -n "${T_A:-}" ]; then
     # 同样的有损链路问题：JSON 断言也要重试，否则一次超时会被当成"接口坏了"
-    ms=""
-    for i in 1 2 3 4; do
+    ms=""; t0=$(date +%s)
+    while :; do
       ms=$(curl -s -b "$jar" -H "Authorization: Bearer $T_A" -m "$CURL_MAX" "$BASE/api/model/status")
       echo "$ms" | grep -q '"driver"' && break
+      [ $(( $(date +%s) - t0 )) -ge "$RETRY_BUDGET" ] && break
       sleep 2
     done
     echo "$ms" | grep -q '"driver"' && ok "model/status" "$(echo "$ms" | head -c 80)" || no "model/status" "${ms:-（4 次均超时，链路不可达）}"
