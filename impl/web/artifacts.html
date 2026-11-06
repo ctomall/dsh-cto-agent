@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cube-agent · 产物</title>
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+<div class="frame" id="frame" data-rail="expanded">
+  <aside class="rail">
+    <div class="rail-head">
+      <span class="brand">cube<span>·agent</span></span>
+    </div>
+    <nav class="nav" aria-label="主导航">
+      <a class="nav-item" href="/" title="工作台"><span class="lbl">工作台</span></a>
+      <a class="nav-item" href="/overview" title="总览"><span class="lbl">总览</span></a>
+      <a class="nav-item active" href="/artifacts" title="产物"><span class="lbl">产物</span></a>
+    </nav>
+  </aside>
+
+  <main class="main" aria-label="产物列表">
+    <header class="topbar">
+      <div class="topbar-left"><strong>产物</strong><span class="meta" id="count">-</span></div>
+      <span class="spacer"></span>
+      <span class="chip-driver" id="sbDriver">驱动 -</span>
+    </header>
+    <section class="scroll" id="list" aria-live="polite" aria-label="产物">
+      <p class="muted">加载中…</p>
+    </section>
+    <footer class="statusbar" role="status" aria-live="polite" aria-label="运行状态">
+      <span id="status">空闲</span>
+      <span class="spacer"></span>
+      <span id="build">build -</span>
+    </footer>
+  </main>
+</div>
+<script src="/artifacts.js"></script>
+</body>
+</html>

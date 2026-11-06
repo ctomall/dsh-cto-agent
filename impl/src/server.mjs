@@ -430,6 +430,33 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       return reply(res, json(200, { audit: items, limit }))
     }
 
+    // —— 全部产物（跨会话，租户内）：/artifacts 页面的数据源 ——
+    if (req.method === 'GET' && url.pathname === '/api/artifacts') {
+      const ctx = ctxOf(req)
+      if (ctx.error) return reply(res, ctx.error)
+      const limitRaw = Number(url.searchParams.get('limit') ?? 100)
+      const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? Math.trunc(limitRaw) : 100, 1), 500)
+      const rows = db
+        .prepare(
+          `select e.run_id, e.payload_json, e.ts, r.session_id
+           from events e join runs r on r.id = e.run_id
+           where e.type = 'artifact.created' and r.tenant_id = ?
+           order by e.rowid desc limit ?`,
+        )
+        .all(ctx.tenantId, limit)
+      const seen = new Set()
+      const items = []
+      for (const row of rows) {
+        let p = {}
+        try { p = JSON.parse(row.payload_json) } catch {}
+        const key = `${row.run_id}:${p.path}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        items.push({ runId: row.run_id, sessionId: row.session_id, path: p.path, mime: p.mime ?? null, size: p.size ?? null, ts: row.ts })
+      }
+      return reply(res, json(200, { artifacts: items, limit }))
+    }
+
     // —— 会话内待审批：刷新/重开页面后仍能把审批卡还原出来 ——
     const pd = /^\/api\/sessions\/([^/]+)\/pending$/.exec(url.pathname)
     if (req.method === 'GET' && pd) {
@@ -502,10 +529,15 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
       req.method === 'GET' &&
       (url.pathname === '/' ||
         url.pathname === '/overview' ||
-        /^\/((app|overview)\.(js|css)|favicon\.svg)$/.test(url.pathname) ||
+        url.pathname === '/artifacts' ||
+        /^\/((app|overview|artifacts)\.(js|css)|favicon\.svg)$/.test(url.pathname) ||
         /^\/fonts\/(montserrat-(light|regular|medium)\.woff2|Montserrat-OFL\.txt)$/.test(url.pathname))
     ) {
-      const file = url.pathname === '/' ? 'index.html' : url.pathname === '/overview' ? 'overview.html' : url.pathname.slice(1)
+      const file =
+        url.pathname === '/' ? 'index.html'
+        : url.pathname === '/overview' ? 'overview.html'
+        : url.pathname === '/artifacts' ? 'artifacts.html'
+        : url.pathname.slice(1)
       try {
         const buf = await readFile(resolve(WEB_ROOT, file))
         res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' })
