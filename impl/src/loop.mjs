@@ -79,8 +79,18 @@ export class AgentLoop {
         // 落库，刷新页面后历史仍在（用户故事 4：关页重开历史完整）
         this.store?.({ tenantId, sessionId, runId, role: 'assistant', content: decision.text })
       }
+      // 模型因长度上限被截断时，产物可能是半截的：必须显式告诉用户，不能静默当成功
+      const truncated = decision.finishReason === 'length'
+      if (truncated) {
+        this.rc.emitTo(runId, 'text.delta', { text: '\n\n（输出因长度上限被截断，可让它接着写）' })
+      }
       this.rc.transition(runId, 'done')
-      this.rc.emitTo(runId, 'run.finished', { runId, ok: true, ...(this.usage ? { usage: this.usage } : {}) })
+      this.rc.emitTo(runId, 'run.finished', {
+        runId,
+        ok: true,
+        ...(truncated ? { truncated: true } : {}),
+        ...(this.usage ? { usage: this.usage } : {}),
+      })
       return { status: 'done' }
     }
 

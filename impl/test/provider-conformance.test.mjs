@@ -84,3 +84,22 @@ test('tool_call 缺 id 时补默认 id，不产生 undefined', async (t) => {
   assert.ok(out.call.id, `id 不能为空：${JSON.stringify(out.call)}`)
   assert.equal(out.call.name, 'fs.write')
 })
+
+test('finish_reason=length：run 标 truncated 并追加提示，不静默当成功', async (t) => {
+  const { url } = await sseOnce(t, (res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ choices: [{ message: { content: '半截的答案' }, finish_reason: 'length' }] }))
+  })
+  const driver = createOpenAiDriver({ baseUrl: url, apiKey: 'k', model: 'm' })
+  const events = []
+  let status = 'running'
+  const rc = { create() {}, transition(_i, to) { status = to }, status: () => status, emitTo(_i, ty, p) { events.push({ ty, p }) } }
+  const { AgentLoop } = await import('../src/loop.mjs')
+  const loop = new AgentLoop({ rc, tools: { schema: [], policy: {}, run: async () => ({}) }, driver, workspaceRoot: '/tmp' })
+  const out = await loop.start({ runId: 'r1', tenantId: 't_a', sessionId: 's_a1', input: 'x' })
+  assert.equal(out.status, 'done')
+  const fin = events.find((e) => e.ty === 'run.finished')
+  assert.equal(fin.p.truncated, true, 'run.finished 应带 truncated')
+  const note = events.filter((e) => e.ty === 'text.delta').map((e) => e.p.text).join('')
+  assert.match(note, /被截断/, '要给用户可见提示')
+})
