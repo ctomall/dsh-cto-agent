@@ -108,15 +108,21 @@ fi
 
 if [ -n "$CF_TOKEN" ]; then
   echo "== 校验 Cloudflare token"
-  v=$(curl -s -m 15 -H "authorization: Bearer $CF_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)
+  CF_API="${CF_API_BASE:-https://api.cloudflare.com/client/v4}"   # 测试时可指向本地 mock
+  v=$(curl -s -m 15 -H "authorization: Bearer $CF_TOKEN" "$CF_API/user/tokens/verify")
   echo "$v" | grep -q '"status":"active"' || { echo "FAIL: token 校验未通过：$(echo "$v" | head -c 200)" >&2; exit 4; }
   echo "== token 有效，开始创建 Access 应用与边缘限流"
   CLOUDFLARE_API_TOKEN="$CF_TOKEN" CF_ACCOUNT_ID="$CF_ACCOUNT" CF_ZONE_ID="$CF_ZONE" ALLOW_EMAILS="$EMAILS" scripts/cf-access-setup.sh
-  sudo install -d -m 750 /etc/cube-agent
-  printf 'CLOUDFLARE_API_TOKEN=%s\nCF_ACCOUNT_ID=%s\nCF_ZONE_ID=%s\n' "$CF_TOKEN" "$CF_ACCOUNT" "$CF_ZONE" | sudo tee /etc/cube-agent/cf.env >/dev/null
-  sudo chmod 600 /etc/cube-agent/cf.env
+  CF_ENV_FILE="${UNBLOCK_CF_ENV:-/etc/cube-agent/cf.env}"   # 测试时可指向临时文件
+  $SUDO mkdir -p "$(dirname "$CF_ENV_FILE")"
+  printf 'CLOUDFLARE_API_TOKEN=%s\nCF_ACCOUNT_ID=%s\nCF_ZONE_ID=%s\n' "$CF_TOKEN" "$CF_ACCOUNT" "$CF_ZONE" | $SUDO tee "$CF_ENV_FILE" >/dev/null
+  $SUDO chmod 600 "$CF_ENV_FILE"
 fi
 
+if [ "${UNBLOCK_SKIP_VERIFY:-0}" = "1" ]; then
+  echo "== 跳过解除后复验（UNBLOCK_SKIP_VERIFY=1）"
+  exit 0
+fi
 echo
 echo "== 解除后复验"
 ./scripts/acceptance.sh --require-all "$BASE"
