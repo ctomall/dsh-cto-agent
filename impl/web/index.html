@@ -39,7 +39,7 @@
     </div>
   </aside>
 
-  <main class="main">
+  <main class="main" aria-label="对话与产物">
     <header class="topbar">
       <div class="crumbs">
         <h1 id="title">新会话</h1>
@@ -56,7 +56,7 @@
       </div>
     </header>
 
-    <section id="stream" class="scroll">
+    <section id="stream" class="scroll" role="log" aria-live="polite" aria-relevant="additions text" aria-label="对话内容">
       <div class="stream-inner">
         <div class="empty" id="empty">
           <h2>说出你要完成的事</h2>
@@ -83,7 +83,7 @@
     </form>
   </main>
 
-  <aside class="panel" id="panel" hidden>
+  <aside class="panel" id="panel" aria-label="产物与授权" hidden>
     <header class="panel-head">
       <h2>产物与授权</h2>
       <span class="meta" id="panelMeta">0 个产物</span>
@@ -102,7 +102,7 @@
     </div>
   </aside>
 
-  <footer class="statusbar">
+  <footer class="statusbar" role="status" aria-live="polite" aria-label="运行状态">
     <span id="sbStatus">空闲</span>
     <span class="spacer"></span>
     <span id="sbBuild">build -</span>
