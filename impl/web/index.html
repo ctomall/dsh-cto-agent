@@ -7,43 +7,71 @@
 <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
-<div class="app">
-  <nav class="nav">
-    <div class="brand">cube<span>·agent</span></div>
-    <div class="nav-group">
-      <div class="nav-label">会话</div>
+<div class="frame" id="frame" data-rail="expanded">
+  <aside class="rail">
+    <div class="rail-head">
+      <span class="brand">cube<span>·agent</span></span>
+      <button class="icon-btn" id="toggleRail" title="收起侧栏" aria-label="收起侧栏">‹</button>
+    </div>
+
+    <nav class="nav">
+      <a class="nav-item active" href="/" title="工作台">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span class="lbl">工作台</span>
+      </a>
+      <a class="nav-item" href="/overview" title="总览">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></svg>
+        <span class="lbl">总览</span>
+      </a>
+    </nav>
+
+    <div class="rail-section">
+      <div class="rail-label">会话</div>
       <ul id="sessions" class="sessions"></ul>
     </div>
-    <div class="nav-foot">
-      <span id="ver" class="mono">build -</span>
-      <span id="who" class="mono">-</span>
+
+    <div class="rail-foot">
+      <button class="nav-item as-btn" id="openArtifacts">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M19 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9l5 5v12a1 1 0 0 1-1 1Z"/></svg>
+        <span class="lbl">产物与授权</span>
+        <span class="badge" id="railBadge">0</span>
+      </button>
     </div>
-  </nav>
+  </aside>
 
   <main class="main">
     <header class="topbar">
-      <h1 id="title">新会话</h1>
-      <div class="run" id="runbar" hidden>
-        <span class="dot" id="rundot"></span>
-        <span id="runlabel">正在执行</span>
-        <button class="ghost" id="stop">停止</button>
+      <div class="crumbs">
+        <h1 id="title">新会话</h1>
+        <span class="sep">·</span>
+        <span class="muted" id="who">-</span>
+      </div>
+      <div class="actions">
+        <span class="run" id="runbar" hidden>
+          <i class="dot" id="rundot"></i>
+          <span id="runlabel">执行中</span>
+        </span>
+        <button class="btn" id="stop" hidden>停止</button>
+        <button class="btn" id="openArtifactsTop">产物 <span id="topBadge">0</span></button>
       </div>
     </header>
 
-    <section id="stream" class="stream">
-      <div class="empty" id="empty">
-        <h2>把目标交给它，它自己选工具</h2>
-        <p>危险动作执行前会停下来等你确认，产物落进会话工作区。</p>
-        <div class="examples">
-          <button class="chip" data-fill="把这三个 PDF 汇总成一份带目录的 docx">把三个 PDF 汇总成 docx</button>
-          <button class="chip" data-fill="查一下这个库的构建失败原因">查构建失败原因</button>
-          <button class="chip" data-fill="把这段结论写进知识库">写进知识库</button>
+    <section id="stream" class="scroll">
+      <div class="stream-inner">
+        <div class="empty" id="empty">
+          <h2>说出你要完成的事</h2>
+          <p>Agent 会调用工具，危险动作执行前会停下来等你确认；产物落在会话工作区。</p>
+          <div class="examples">
+            <button class="chip" data-fill="把这三个 PDF 汇总成一份带目录的 docx">把三个 PDF 汇总成 docx</button>
+            <button class="chip" data-fill="查一下这个库的构建失败原因">查构建失败原因</button>
+            <button class="chip" data-fill="把这段结论写进知识库">写进知识库</button>
+          </div>
         </div>
       </div>
     </section>
 
     <form class="composer" id="composer">
-      <div class="composer-row">
+      <div class="composer-inner">
         <textarea id="input" rows="1" placeholder="描述你要完成的事"></textarea>
         <button type="submit" id="send">发送</button>
       </div>
@@ -55,17 +83,32 @@
     </form>
   </main>
 
-  <aside class="side">
-    <section class="side-block">
-      <div class="side-label">产物</div>
-      <div id="artifacts" class="artifacts"><p class="muted">还没有产物</p></div>
-    </section>
-    <section class="side-block">
-      <div class="side-label">本会话授权</div>
-      <p class="muted" id="grants">尚未授权任何工具</p>
-      <button class="btn quiet" id="revoke">撤销本会话授权</button>
-    </section>
+  <aside class="panel" id="panel" hidden>
+    <header class="panel-head">
+      <h2>产物与授权</h2>
+      <span class="meta" id="panelMeta">0 个产物</span>
+      <button class="icon-btn" id="closePanel" aria-label="关闭">×</button>
+    </header>
+    <div class="panel-body">
+      <div class="panel-block">
+        <div class="panel-label">产物</div>
+        <div id="artifacts" class="artifacts"><p class="muted">还没有产物</p></div>
+      </div>
+      <div class="panel-block">
+        <div class="panel-label">本会话授权</div>
+        <p class="muted" id="grants">尚未授权任何工具</p>
+        <button class="btn" id="revoke">撤销本会话授权</button>
+      </div>
+    </div>
   </aside>
+
+  <footer class="statusbar">
+    <span id="sbStatus">空闲</span>
+    <span class="spacer"></span>
+    <span id="sbBuild">build -</span>
+    <span id="sbTenant">-</span>
+    <span id="sbTime">-</span>
+  </footer>
 </div>
 <script src="/app.js"></script>
 </body>
