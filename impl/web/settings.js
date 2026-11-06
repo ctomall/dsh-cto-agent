@@ -38,6 +38,9 @@ async function main() {
     row('请求体上限', body.maxBodyBytes ? `${(body.maxBodyBytes / 1024).toFixed(0)} KB` : '-'),
     row('升级测试门禁', body.upgrade?.testGate ? '开启（失败自动回滚）' : '关闭'),
     row('升级后自重启', body.upgrade?.exitAfter ? '开启' : '关闭'),
+    row('单 run 步数上限', body.agent?.maxSteps ? `${body.agent.maxSteps} 步` : '-'),
+    row('单 run 超时', body.agent?.timeoutMs ? `${(body.agent.timeoutMs / 1000).toFixed(0)} 秒` : '-'),
+    row('历史带入条数', body.agent?.historyLimit ? `${body.agent.historyLimit} 条` : '-'),
     row('限流 api / runs / upgrade / login', [body.limits?.api?.limit, body.limits?.runs?.limit, body.limits?.upgrade?.limit, body.limits?.login?.limit].map((n) => `${n}/分`).join(' · '))
   )
   // 模型连通性探针：接上 key 后先"试一句"，再跑真任务

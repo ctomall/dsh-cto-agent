@@ -159,13 +159,20 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
   }
   if (gate) console.log('[cube-agent] 身份门：已开启（APP_PASSWORD）')
   const grants = createGrants(db)
+  // 真实模型常需要更多步数/更长超时：做成运维旋钮，而不是改代码
+  const numEnv = (k, d) => {
+    const v = Number(process.env[k])
+    return Number.isFinite(v) && v > 0 ? Math.trunc(v) : d
+  }
   const loop = new AgentLoop({
     rc,
     tools: createTools({ workspaceRoot: WORKSPACE_ROOT }),
     driver,
     grants,
     workspaceRoot: WORKSPACE_ROOT,
-    timeoutMs: Number(process.env.AGENT_TIMEOUT_MS ?? 120_000),
+    timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
+    maxSteps: numEnv('AGENT_MAX_STEPS', 10),
+    historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
     loadHistory: ({ tenantId, sessionId, limit }) =>
       db
         .prepare('select role, content from messages where tenant_id = ? and session_id = ? order by rowid desc limit ?')
@@ -483,6 +490,11 @@ export function createApp(db, { log = new EventLog(db), rc = new RunController(d
         maxBodyBytes: MAX_BODY,
         retentionDays: Number.isFinite(keepDays) ? keepDays : null,
         upgrade: { testGate: process.env.UPGRADE_RUN_TESTS === '1', exitAfter: process.env.UPGRADE_EXIT_AFTER === '1' },
+        agent: {
+          maxSteps: numEnv('AGENT_MAX_STEPS', 10),
+          timeoutMs: numEnv('AGENT_TIMEOUT_MS', 120_000),
+          historyLimit: numEnv('AGENT_HISTORY_LIMIT', 20),
+        },
         startedAt,
         // 明确不返回：令牌、口令、模型密钥、DB 绝对路径
       }))
