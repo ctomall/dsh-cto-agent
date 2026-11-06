@@ -50,6 +50,7 @@
 | `mock-provider.mjs` | OpenAI 兼容的本地 mock（流式），只为验证"接线"：先给 tool_call（需审批），再给最终文本。 |
 | `model-doctor.mjs` | 模型配置自检：一眼看出线上是真模型还是假模型；--probe 会真发一次请求。 |
 | `mutation-probe.sh` | 变异探针：故意改坏一处实现，确认测试会红——证明这套测试真的在管事，而不是全绿摆设。 |
+| `mutation-sweep.sh` | 变异批量扫描：逐条改坏实现 → 跑全量测试 → 记录"是否变红" → 还原。 |
 | `orphan-drill.sh` | 孤儿 run 演练：模拟「工具执行中途进程被杀」，验证启动收敛把 running 标成 failed。 |
 | `preflight-model.sh` | 接通真实模型前的体检：缺什么、地址通不通、key 文件权限对不对。 |
 | `provider-conformance.mjs` | 给定任意 OpenAI 兼容端点，逐项验证"我们的驱动是否与它兼容"。 |
