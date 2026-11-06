@@ -40,3 +40,12 @@ test('状态栏展示真实驱动（模型未接上时不能装作在思考）',
   assert.match(js, /\/api\/model\/status/, 'boot 时必须查询驱动状态')
   assert.match(js, /演示驱动（未接模型）/, '未接模型时要有明确文案')
 })
+
+test('429 有统一人话（不能让用户看到泛化的「失败」）', () => {
+  const js = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  const sjs = readFileSync(new URL('../web/settings.js', import.meta.url), 'utf8')
+  assert.match(js, /function rateLimitedText/, '要有统一的限流文案函数')
+  assert.match(js, /retry-after/, '要读取 retry-after')
+  assert.match(js, /过于频繁/, '文案要说明是限流')
+  assert.match(sjs, /过于频繁/, '探针也要有 429 文案')
+})

@@ -36,7 +36,18 @@ async function api(path, opts = {}) {
       ...(opts.headers || {}),
     },
   })
-  return { status: res.status, body: await res.json().catch(() => ({})) }
+  const body = await res.json().catch(() => ({}))
+  if (res.status === 429) {
+    const retry = Number(res.headers.get('retry-after'))
+    body.retryAfter = Number.isFinite(retry) && retry > 0 ? retry : null
+  }
+  return { status: res.status, body }
+}
+
+// 429 的统一人话：告诉用户等多久，而不是「操作失败」
+function rateLimitedText(body, fallback = '操作') {
+  const wait = body?.retryAfter
+  return `${fallback}过于频繁${wait ? `，请 ${wait} 秒后再试` : '，请稍后再试'}`
 }
 
 function streamInner() {
@@ -150,6 +161,12 @@ function approvalCard(p) {
     state.decided = true
     for (const b of [deny, once, sess]) b.disabled = true
     const { status } = await api(`/api/approvals/${runId}`, { method: 'POST', body: JSON.stringify({ decision }) })
+    if (status === 429) {
+      state.decided = false
+      for (const b of [deny, once, sess]) b.disabled = false
+      setStatus(rateLimitedText({}, '审批'), 'error')
+      return
+    }
     if (status === 200) {
       markDecided(decision)
       // 同时更新上方工具卡的状态：刷新还原过的卡片不会走 SSE 的 callId 匹配
@@ -291,6 +308,7 @@ async function send(text) {
   $('#input').value = ''
   setStatus('已提交', 'running')
   const { status, body } = await api('/api/runs', { method: 'POST', body: JSON.stringify({ input: text, sessionId: state.sessionId }) })
+  if (status === 429) { setStatus(rateLimitedText(body, '发送'), 'error'); return }
   if (status !== 202) { setStatus('提交失败', 'done'); return }
   state.runId = body.runId
   subscribe(body.runId)

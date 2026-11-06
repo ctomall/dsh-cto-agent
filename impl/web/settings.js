@@ -55,7 +55,8 @@ async function main() {
     try {
       const r = await fetch('/api/model/probe', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} })
       const j = await r.json().catch(() => ({}))
-      if (r.status === 200 && j.ok) out.textContent = `✔ ${j.driver} · ${j.ms}ms · ${JSON.stringify(j.sample)}`
+      if (r.status === 429) { const w = Number(r.headers.get('retry-after')); out.textContent = `请求过于频繁${w > 0 ? `，请 ${w} 秒后再试` : '，请稍后再试'}` }
+      else if (r.status === 200 && j.ok) out.textContent = `✔ ${j.driver} · ${j.ms}ms · ${JSON.stringify(j.sample)}`
       else if (j.error === 'driver_is_stub') out.textContent = '桩驱动：先配置 MODEL_* 并重启'
       else out.textContent = `�� 失败：${j.message ?? j.error ?? r.status}`
     } catch (e) {
