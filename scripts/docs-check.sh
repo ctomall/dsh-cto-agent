@@ -60,5 +60,21 @@ else
   skip "HANDOFF 测试文件数" "缺少 <!-- test-files: N --> 标记"
 fi
 
+
+# scripts/README.md 必须与 scripts/ 目录一致（防止"脚本加了但没人知道"）
+if [ -f scripts/README.md ]; then
+  actual=$(ls scripts/*.sh scripts/*.mjs 2>/dev/null | xargs -n1 basename | grep -v '^gen-scripts-index.mjs$' | sort)
+  listed=$(grep -oE '^\| `[^`]+`' scripts/README.md | sed 's/^| `//;s/`$//' | sort)
+  if [ "$actual" = "$listed" ]; then
+    ok "scripts/README 一致性" "$(printf '%s\n' "$actual" | wc -l | tr -d ' ') 个脚本"
+  else
+    missing=$(comm -23 <(printf '%s\n' "$actual") <(printf '%s\n' "$listed") | tr '\n' ' ')
+    stale=$(comm -13 <(printf '%s\n' "$actual") <(printf '%s\n' "$listed") | tr '\n' ' ')
+    no "scripts/README 一致性" "缺:${missing:-无} 多:${stale:-无}"
+  fi
+else
+  skip "scripts/README 一致性" "未生成（node scripts/gen-scripts-index.mjs）"
+fi
+
 echo "== 汇总：pass=$pass fail=$fail"
 [ "$fail" -eq 0 ] || exit 1
