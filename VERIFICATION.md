@@ -17,7 +17,7 @@
 ✔ secret-scan        pass=6 fail=0
 ✔ a11y-contrast      全部达标
 ✔ ratelimit-check    pass=4 fail=0
-○ acceptance         pass=20 fail=0 skip=2（有 SKIP）
+○ acceptance         pass=21 fail=0 skip=2（有 SKIP）
 == 结论：pass=4 fail=0 skip=1 → 目标未完成
 ```
 
@@ -110,7 +110,7 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 | 检查 | 命令 | 结果 |
 |---|---|---|
 | 全量测试 | `node --test impl/test/*.test.mjs` | **175 / 175** |
-| 目标验收 | `./scripts/acceptance.sh http://127.0.0.1:8787` | pass=20 fail=0 skip=2 |
+| 目标验收 | `./scripts/acceptance.sh http://127.0.0.1:8787` | pass=21 fail=0 skip=2 |
 | 一键复核 | `./scripts/verify-all.sh` | pass=6 fail=0 skip=1 |
 | 恢复演练（最新备份） | `./scripts/restore-drill.sh 8797 --from-latest` | pass=7 fail=0 |
 | 孤儿 run 收敛 | `./scripts/orphan-drill.sh 8798` | pass=7 fail=0 |
@@ -126,7 +126,7 @@ scripts/unblock.sh --cf-token ... --cf-account ... --cf-zone ... --allow-emails 
 
 ## 当前结论（2026-11-06）
 
-<!-- acceptance: pass=20 fail=0 skip=2 -->
+<!-- acceptance: pass=21 fail=0 skip=2 -->
 
 | 计划 | 状态 | 差距 |
 |---|---|---|

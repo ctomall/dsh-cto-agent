@@ -171,6 +171,12 @@ done
 r2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"再写一份\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
 e2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r2/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
 if echo "$e2" | grep -q 'approval.requested'; then no "同会话第二次免审批" "$e2"; else ok "同会话第二次免审批" "auto_approved"; fi
+# ② 的另一半：同租户、**不同会话**不能继承授权（此前只有手工检查覆盖，验收器必须自己验）
+SID2=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 20 -d '{"title":"验收会话B"}' "$BASE/api/sessions" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))' 2>/dev/null)
+r4=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"另一个会话写一份\",\"sessionId\":\"$SID2\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
+e4=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -m 10 "$BASE/api/runs/$r4/events" | grep '^event:' | sed 's/event: //' | tr '\n' ' ')
+echo "$e4" | grep -q 'approval.requested' && ok "跨会话不继承授权" "新会话重新要求审批" || no "跨会话不继承授权" "$e4"
+
 rv=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 20 -d '{}' "$BASE/api/sessions/$SID/grants/revoke" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("revoked",""))' 2>/dev/null)
 [ "${rv:-0}" -ge 1 ] && ok "撤销会话授权" "${rv} 条" || no "撤销会话授权" "revoked=$rv"
 r3=$(curl -s -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application/json' -m 60 -d "{\"input\":\"再写\",\"sessionId\":\"$SID\"}" "$BASE/api/runs" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("runId",""))')
@@ -180,7 +186,7 @@ x=$(code -b "$JAR" -H "Authorization: Bearer $T_A" -H 'content-type: application
 [ "$x" = 404 ] && ok "跨租户 sessionId" "404" || no "跨租户 sessionId" "期望 404，实际 $x"
 
 # 验收自己收尾：r3 等仍在等审批的 run 必须取消，否则每次验收都留下僵尸（cancel 幂等）
-for r in $r1 $r2 $r3; do
+for r in $r1 $r2 $r3 $r4; do
   [ -n "$r" ] && curl -s -o /dev/null -m 20 -b "$JAR" -H "Authorization: Bearer $T_A" -X POST "$BASE/api/runs/$r/cancel" || true
 done
 
