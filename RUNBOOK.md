@@ -228,10 +228,10 @@ CUBE_TOKENS='{"tok_a":{"tenantId":"t_a","userId":"u_a"},"tok_b":{"tenantId":"t_b
 PORT=8899 DB_PATH=/tmp/vc/cube.db WORKSPACE_ROOT=/tmp/vc/ws node impl/src/server.mjs &
 
 PW='pw-1' TOK_A=tok_a TOK_B=tok_b ./scripts/acceptance.sh http://127.0.0.1:8899
-# → pass=21 fail=0 skip=2（两个 SKIP 是 ① 真实模型 / ③ 边缘 Access）
+# → pass=22 fail=0 skip=2（两个 SKIP 是 ① 真实模型 / ③ 边缘 Access）
 ```
 
-**实测**：空库干净克隆上 pass=21 fail=0 skip=2（2026-11-06）。
+**实测**：空库干净克隆上 pass=22 fail=0 skip=2（2026-11-06）。
 
 ## 就绪快照（一条命令，数字全部现场生成）
 

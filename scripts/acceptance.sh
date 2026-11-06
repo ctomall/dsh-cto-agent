@@ -217,6 +217,14 @@ csrf=$(code -b "$JAR" -H 'content-type: application/json' -H 'sec-fetch-site: cr
 
 up=$(code -X POST -H "x-upgrade-token: wrong" "$BASE/api/admin/upgrade")
 { [ "$up" = 401 ] || [ "$up" = 403 ] || [ "$up" = 503 ] || [ "$up" = 429 ]; } && ok "升级接口需凭据" "$up" || no "升级接口需凭据" "$up"
+# "仅限授权主体"要精确：**有会话 Cookie、但没带升级 token，也必须被拒**（否则"只要登录就能升级"）
+up_cookie=$(code -b "$JAR" -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/admin/upgrade")
+case "$up_cookie" in
+  401|403) ok "升级：有会话仍需 token" "$up_cookie" ;;
+  503) sk "升级：有会话仍需 token" "升级接口未启用（未配置 CUBE_UPGRADE_TOKEN）" ;;
+  429) sk "升级：有会话仍需 token" "限流中，未验证" ;;
+  *) no "升级：有会话仍需 token" "期望 401/403，实际 $up_cookie" ;;
+esac
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CF_ACCOUNT_ID:-}" ]; then
   apps=$(curl -s -m 15 -H "authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/access/apps")
   echo "$apps" | grep -q 'cto.ila3.top' && ok "Cloudflare Access 应用" "已存在" || sk "Cloudflare Access 应用" "已配置凭据但未找到应用"
